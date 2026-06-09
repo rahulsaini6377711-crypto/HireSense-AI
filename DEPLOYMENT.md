@@ -22,13 +22,12 @@ Before deploying, optimize your build:
 npm run build
 ```
 
-Current build size: ~180KB gzipped
+The build is configured with Rollup Manual Chunks optimization inside [vite.config.js](file:///c:/py/HireSense%20AI/vite.config.js) to split vendors (`firebase`, `recharts`, `pdfjs-dist`, `framer-motion`, and `jspdf`) into isolated cached blocks, ensuring initial page load sizes remain under 200KB.
 
-### To further reduce bundle:
-1. Remove unused dependencies
-2. Use dynamic imports for large features
-3. Enable gzip compression on server
-4. Cache assets with service workers
+### Static Route Redirection Configuration
+To prevent 404 page refreshes on client-side routing, we include ready-to-deploy SPA redirections:
+- **Vercel**: Configured in [vercel.json](file:///c:/py/HireSense%20AI/vercel.json)
+- **Netlify**: Configured in [netlify.toml](file:///c:/py/HireSense%20AI/netlify.toml)
 
 ## Deployment Options
 

@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiArrowRight, FiCheck, FiTrendingUp, FiBriefcase } from 'react-icons/fi';
 import Footer from '../components/Footer';
+import { useSEO } from '../hooks/useSEO';
 
 const Home = () => {
+  useSEO('Optimize Your Career Search', 'Evaluate your resume, boost your ATS score, and practice mock technical interview questions with HireSense AI.');
   const features = [
     {
       icon: FiTrendingUp,

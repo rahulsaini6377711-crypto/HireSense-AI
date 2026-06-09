@@ -58,6 +58,21 @@ export const getUserProfile = async (uid) => {
   return { id: snapshot.id, ...snapshot.data() };
 };
 
+export const updateUserProfile = async (uid, updates) => {
+  const userRef = doc(db, USERS_COLLECTION, uid);
+  await setDoc(userRef, {
+    ...updates,
+    updatedAt: new Date()
+  }, { merge: true });
+
+  await logActivity({
+    userId: uid,
+    userEmail: updates.email || '',
+    action: 'profile_updated',
+    details: { fields: Object.keys(updates) },
+  });
+};
+
 export const ensureUserProfile = async (firebaseUser, name) => {
   const existing = await getUserProfile(firebaseUser.uid);
   if (existing) {

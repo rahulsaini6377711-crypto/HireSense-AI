@@ -2,27 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
-import { FiArrowRight, FiLoader } from 'react-icons/fi';
+import { FiArrowRight, FiLoader, FiDownload, FiMail, FiTrash2, FiArrowLeft, FiAlertCircle } from 'react-icons/fi';
 import ResumeUploadZone from '../components/ResumeUploadZone';
 import ResumePreview from '../components/ResumePreview';
-import { uploadResume, getUserResumes, saveAnalysisResult } from '../services/resumeStorage';
+import { uploadResume, getUserResumes, saveAnalysisResult, getUserAnalyses, deleteAnalysis } from '../services/resumeStorage';
 import { extractResumeInfo } from '../services/resumeParser';
 import { analyzeResume } from '../services/aiAnalyzer';
 import AtsScoreCard from '../components/AtsScoreCard';
-
+import EmailReportModal from '../components/EmailReportModal';
+import { generateResumeAnalysisPDF } from '../utils/pdfGenerator';
+import { useNotifications } from '../hooks/useNotifications';
+import { useSEO } from '../hooks/useSEO';
 
 const ResumeAnalysis = () => {
+  useSEO('Resume Analysis', 'Upload your PDF resume to perform deep ATS scanning and matching.');
   const { user } = useAuth();
+  const { addNotification } = useNotifications();
   const [uploadedFile, setUploadedFile] = useState(null);
   const [parsedResume, setParsedResume] = useState(null);
   const [extractedInfo, setExtractedInfo] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [userResumes, setUserResumes] = useState([]);
+  const [userAnalyses, setUserAnalyses] = useState([]);
   const [loadingResumes, setLoadingResumes] = useState(true);
   const [activeTab, setActiveTab] = useState('upload');
+  
+  // History report viewer states
+  const [selectedAnalysis, setSelectedAnalysis] = useState(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
-  // Load user's resumes on mount
+  // Load user's resumes and analysis reports on mount
   useEffect(() => {
     if (user?.uid) {
       loadUserResumes();
@@ -32,10 +42,14 @@ const ResumeAnalysis = () => {
   const loadUserResumes = async () => {
     try {
       setLoadingResumes(true);
-      const resumes = await getUserResumes(user.uid);
+      const [resumes, analyses] = await Promise.all([
+        getUserResumes(user.uid),
+        getUserAnalyses(user.uid)
+      ]);
       setUserResumes(resumes);
+      setUserAnalyses(analyses);
     } catch (error) {
-      console.error('Error loading resumes:', error);
+      console.error('Error loading resumes and analyses:', error);
       toast.error('Failed to load your resumes');
     } finally {
       setLoadingResumes(false);
@@ -82,9 +96,14 @@ const ResumeAnalysis = () => {
       
       // Save computed AI Analysis to Firestore resume_analysis collection
       const targetAnalysis = analysis || analysisResult || analyzeResume(resumeData.text);
-      await saveAnalysisResult(user.uid, targetAnalysis);
+      await saveAnalysisResult(user.uid, targetAnalysis, uploadedFile.name);
       
       toast.success('Resume and AI Analysis saved successfully!');
+      addNotification(
+        'Resume Analyzed',
+        `Your resume "${uploadedFile.name}" has been successfully uploaded and analyzed.`,
+        'success'
+      );
       
       // Reload user resumes
       await loadUserResumes();
@@ -105,9 +124,33 @@ const ResumeAnalysis = () => {
     await handleUploadToFirebase(parsedResume);
   };
 
+  const handleDeleteReport = async (e, id) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this analysis report?')) return;
+    try {
+      await deleteAnalysis(id);
+      addNotification('Report Deleted', 'A resume analysis report has been removed.', 'info');
+      await loadUserResumes();
+      if (selectedAnalysis?.id === id) {
+        setSelectedAnalysis(null);
+      }
+    } catch (err) {
+      toast.error('Failed to delete report');
+    }
+  };
+
+  // Map analysis database fields to match AtsScoreCard expectations
+  const getNormalizedAnalysis = (report) => {
+    if (!report) return null;
+    return {
+      ...report,
+      detectedSkills: report.skills || report.detectedSkills || [],
+      improvementSuggestions: report.suggestions || report.improvementSuggestions || [],
+    };
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pb-12">
       {/* Header */}
       <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-gray-200 dark:border-gray-700/50 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -138,14 +181,17 @@ const ResumeAnalysis = () => {
             {/* Tabs */}
             <div className="flex gap-2 bg-white/50 dark:bg-gray-800/50 p-1 rounded-xl">
               <button
-                onClick={() => setActiveTab('upload')}
+                onClick={() => {
+                  setActiveTab('upload');
+                  setSelectedAnalysis(null);
+                }}
                 className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
                   activeTab === 'upload'
                     ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-md'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
-                Upload
+                Upload & Parse
               </button>
               <button
                 onClick={() => setActiveTab('history')}
@@ -155,10 +201,10 @@ const ResumeAnalysis = () => {
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
-                History
-                {userResumes.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {userResumes.length}
+                Saved Analyses
+                {userAnalyses.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-550 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {userAnalyses.length}
                   </span>
                 )}
               </button>
@@ -188,9 +234,25 @@ const ResumeAnalysis = () => {
                   <div className="space-y-8">
                     {analysisResult && (
                       <div className="space-y-4">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                          AI Analysis Report
-                        </h2>
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            AI Analysis Report
+                          </h2>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => generateResumeAnalysisPDF(analysisResult, uploadedFile?.name + '_analysis.pdf')}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-white text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-750 transition"
+                            >
+                              <FiDownload /> PDF
+                            </button>
+                            <button
+                              onClick={() => setIsEmailModalOpen(true)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-white text-xs font-bold rounded-lg border border-gray-250 dark:border-gray-750 transition"
+                            >
+                              <FiMail /> Email
+                            </button>
+                          </div>
+                        </div>
                         <AtsScoreCard analysis={analysisResult} />
                       </div>
                     )}
@@ -236,51 +298,111 @@ const ResumeAnalysis = () => {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
               >
-                {loadingResumes ? (
-                  <div className="flex items-center justify-center py-12">
-                    <FiLoader className="w-8 h-8 animate-spin text-blue-500" />
-                  </div>
-                ) : userResumes.length === 0 ? (
-                  <div className="text-center py-12 bg-white/50 dark:bg-gray-800/50 rounded-2xl">
-                    <p className="text-gray-600 dark:text-gray-400 text-lg">
-                      No resumes uploaded yet
-                    </p>
-                    <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
-                      Upload your first resume to get started
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {userResumes.map((resume) => (
-                      <motion.div
-                        key={resume.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                              {resume.originalFileName}
-                            </h3>
-                            <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
-                              <span>📄 {resume.pageCount} pages</span>
-                              <span>💾 {(resume.fileSize / 1024).toFixed(2)} KB</span>
-                              <span>📅 {new Date(resume.uploadedAt).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                          <a
-                            href={resume.storageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+                {!selectedAnalysis ? (
+                  /* History List */
+                  loadingResumes ? (
+                    <div className="flex items-center justify-center py-12">
+                      <FiLoader className="w-8 h-8 animate-spin text-blue-500" />
+                    </div>
+                  ) : userAnalyses.length === 0 ? (
+                    <div className="text-center py-12 bg-white/50 dark:bg-gray-800/50 rounded-2xl">
+                      <p className="text-gray-600 dark:text-gray-400 text-lg font-bold">
+                        No saved analyses found
+                      </p>
+                      <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
+                        Upload your first resume in the tab above to log report details.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {userAnalyses.map((report) => {
+                        const date = report.createdAt?.toDate ? report.createdAt.toDate().toLocaleDateString() : new Date(report.createdAt || 0).toLocaleDateString();
+                        return (
+                          <motion.div
+                            key={report.id}
+                            whileHover={{ y: -2 }}
+                            onClick={() => setSelectedAnalysis(report)}
+                            className="bg-white dark:bg-gray-850 rounded-2xl border border-gray-200 dark:border-gray-700/80 p-5 hover:shadow-lg transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                           >
-                            View
-                          </a>
-                        </div>
-                      </motion.div>
-                    ))}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-bold text-gray-900 dark:text-white truncate">
+                                {report.fileName || 'Resume Report'}
+                              </h3>
+                              <div className="flex flex-wrap gap-3 mt-2 text-xs font-semibold text-gray-500 dark:text-gray-450">
+                                <span>📅 Analyzed: {date}</span>
+                                <span>🎯 Overall: {report.overallRating || 'N/A'}</span>
+                                <span>🛠️ Skills detected: {report.skills?.length || 0}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+                              <div className="flex flex-col items-center">
+                                <span className={`text-2xl font-black ${
+                                  report.atsScore >= 85 ? 'text-emerald-500' : report.atsScore >= 65 ? 'text-blue-500' : 'text-rose-500'
+                                }`}>
+                                  {report.atsScore}%
+                                </span>
+                                <span className="text-[9px] uppercase tracking-wider text-gray-450 font-bold">ATS Score</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateResumeAnalysisPDF(getNormalizedAnalysis(report), report.fileName + '_report.pdf');
+                                  }}
+                                  className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 rounded-lg text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 transition"
+                                  title="Download PDF"
+                                >
+                                  <FiDownload size={14} />
+                                </button>
+                                <button
+                                  onClick={(e) => handleDeleteReport(e, report.id)}
+                                  className="p-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-lg border border-red-200 dark:border-red-900/30 transition"
+                                  title="Delete Report"
+                                >
+                                  <FiTrash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  /* Detail Report View */
+                  <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-750 pb-4">
+                      <button
+                        onClick={() => setSelectedAnalysis(null)}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+                      >
+                        <FiArrowLeft /> Back to Saved Lists
+                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => generateResumeAnalysisPDF(getNormalizedAnalysis(selectedAnalysis), selectedAnalysis.fileName + '_analysis.pdf')}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow transition"
+                        >
+                          <FiDownload /> Download PDF
+                        </button>
+                        <button
+                          onClick={() => setIsEmailModalOpen(true)}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow transition"
+                        >
+                          <FiMail /> Email PDF
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteReport(e, selectedAnalysis.id)}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow transition"
+                        >
+                          <FiTrash2 /> Delete
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <AtsScoreCard analysis={getNormalizedAnalysis(selectedAnalysis)} />
                   </div>
                 )}
               </motion.div>
@@ -388,6 +510,15 @@ const ResumeAnalysis = () => {
           </div>
         </div>
       </div>
+
+      {/* Email Report Modal */}
+      <EmailReportModal
+        isOpen={isEmailModalOpen}
+        onClose={() => setIsEmailModalOpen(false)}
+        reportName={(selectedAnalysis || analysisResult)?.fileName || uploadedFile?.name || 'Resume Analysis Report'}
+        reportType="resume_analysis"
+        reportData={getNormalizedAnalysis(selectedAnalysis || analysisResult)}
+      />
     </div>
   );
 };

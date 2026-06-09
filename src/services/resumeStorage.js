@@ -164,11 +164,12 @@ export const updateResumeMetadata = async (resumeId, updates) => {
  * @param {Object} analysisData - Detailed analysis data
  * @returns {Promise<string>} Created document ID
  */
-export const saveAnalysisResult = async (userId, analysisData) => {
+export const saveAnalysisResult = async (userId, analysisData, fileName = 'Resume') => {
   try {
     const analysisCollection = collection(db, 'resume_analysis');
     const docRef = await addDoc(analysisCollection, {
       userId,
+      fileName,
       atsScore: analysisData.atsScore,
       overallRating: analysisData.overallRating,
       strengths: analysisData.strengths,
@@ -185,7 +186,7 @@ export const saveAnalysisResult = async (userId, analysisData) => {
       userId,
       userEmail: auth.currentUser?.email,
       action: 'analysis_saved',
-      details: { analysisId: docRef.id, atsScore: analysisData.atsScore },
+      details: { analysisId: docRef.id, atsScore: analysisData.atsScore, fileName },
     });
 
     return docRef.id;
@@ -364,4 +365,54 @@ export const getUserJobMatches = async (userId) => {
     throw error;
   }
 };
+
+/**
+ * Get all resume analysis results for a user
+ * @param {string} userId - The user's ID
+ * @returns {Promise<Array>} Array of analysis documents
+ */
+export const getUserAnalyses = async (userId) => {
+  try {
+    const analysisCollection = collection(db, 'resume_analysis');
+    const q = query(analysisCollection, where('userId', '==', userId));
+    const querySnapshot = await getDocs(q);
+
+    const analyses = [];
+    querySnapshot.forEach((doc) => {
+      analyses.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    // Sort by createdAt descending
+    analyses.sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+      return dateB - dateA;
+    });
+
+    return analyses;
+  } catch (error) {
+    console.error('Error fetching user analyses:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a resume analysis report
+ * @param {string} analysisId - The analysis document ID
+ * @returns {Promise<void>}
+ */
+export const deleteAnalysis = async (analysisId) => {
+  try {
+    const analysisRef = doc(db, 'resume_analysis', analysisId);
+    await deleteDoc(analysisRef);
+    toast.success('Analysis report deleted successfully');
+  } catch (error) {
+    console.error('Error deleting analysis:', error);
+    throw error;
+  }
+};
+
 

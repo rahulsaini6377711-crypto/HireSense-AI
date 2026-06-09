@@ -7,8 +7,10 @@ import AtsScoreCard from '../components/AtsScoreCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../hooks/useAuth';
 import { getLatestAnalysisResult } from '../services/resumeStorage';
+import { useSEO } from '../hooks/useSEO';
 
 const Dashboard = () => {
+  useSEO('Dashboard', 'Get a summary of your resume parsing metrics and interview schedules.');
   const navigate = useNavigate();
   const { user } = useAuth();
   const [latestAnalysis, setLatestAnalysis] = useState(null);

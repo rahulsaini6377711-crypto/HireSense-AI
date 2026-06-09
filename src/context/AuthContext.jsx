@@ -24,16 +24,33 @@ export const AuthProvider = ({ children }) => {
       return null;
     }
 
-    const profile = await ensureUserProfile(firebaseUser);
-    setUserProfile(profile);
-    return profile;
+    try {
+      const profile = await ensureUserProfile(firebaseUser);
+      setUserProfile(profile);
+      return profile;
+    } catch (err) {
+      console.warn("Failed to retrieve user profile from Firestore, using offline fallback:", err.message);
+      const fallbackProfile = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email || '',
+        name: firebaseUser.displayName || 'User',
+        role: 'user',
+        status: 'active'
+      };
+      setUserProfile(fallbackProfile);
+      return fallbackProfile;
+    }
   }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        await loadUserProfile(currentUser);
+        try {
+          await loadUserProfile(currentUser);
+        } catch (err) {
+          console.error("onAuthStateChanged profile load error:", err);
+        }
       } else {
         setUserProfile(null);
       }
