@@ -4,7 +4,13 @@ import toast from 'react-hot-toast';
 import { FiUploadCloud, FiFile, FiX, FiCheck } from 'react-icons/fi';
 import { parseResumePDF, validateResumeFile, formatFileSize } from '../services/resumeParser';
 
-const ResumeUploadZone = ({ onFileSelect, onParseComplete, isLoading = false }) => {
+const ResumeUploadZone = ({ 
+  onFileSelect, 
+  onParseComplete, 
+  isLoading = false,
+  externalProgress = null,
+  externalStatus = null
+}) => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -34,24 +40,18 @@ const ResumeUploadZone = ({ onFileSelect, onParseComplete, isLoading = false }) 
     setProgress(0);
 
     try {
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + Math.random() * 30;
-        });
-      }, 500);
+      // Use real page-by-page parsing progress
+      const parsedData = await parseResumePDF(file, (pct) => {
+        setProgress(pct);
+      });
 
-      const parsedData = await parseResumePDF(file);
-
-      clearInterval(progressInterval);
       setProgress(100);
-
       toast.success('Resume parsed successfully!');
-      onParseComplete?.(parsedData);
+      
+      // Await parent handling (e.g. Firebase uploads) before resetting state
+      if (onParseComplete) {
+        await onParseComplete(parsedData);
+      }
 
       // Reset after 1 second
       setTimeout(() => {
@@ -80,6 +80,10 @@ const ResumeUploadZone = ({ onFileSelect, onParseComplete, isLoading = false }) 
     setProgress(0);
   };
 
+  const isProcessing = parsing || isLoading;
+  const currentProgress = externalProgress !== null && externalProgress !== undefined ? externalProgress : progress;
+  const statusMessage = externalStatus || (parsing ? "Parsing resume..." : "Uploading...");
+
   return (
     <div className="w-full">
       {!uploadedFile ? (
@@ -89,7 +93,7 @@ const ResumeUploadZone = ({ onFileSelect, onParseComplete, isLoading = false }) 
             isDragActive
               ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20'
               : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:bg-gray-50/50 dark:hover:bg-gray-800/50'
-          } ${parsing || isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <input {...getInputProps()} />
 
@@ -133,7 +137,7 @@ const ResumeUploadZone = ({ onFileSelect, onParseComplete, isLoading = false }) 
                 </p>
               </div>
 
-              {parsing ? (
+              {isProcessing ? (
                 <div className="flex-shrink-0">
                   <div className="animate-spin">
                     <div className="w-5 h-5 border-2 border-blue-400 border-t-blue-600 rounded-full" />
@@ -144,7 +148,7 @@ const ResumeUploadZone = ({ onFileSelect, onParseComplete, isLoading = false }) 
               )}
             </div>
 
-            {!parsing && (
+            {!isProcessing && (
               <button
                 onClick={handleRemove}
                 className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-colors"
@@ -154,18 +158,18 @@ const ResumeUploadZone = ({ onFileSelect, onParseComplete, isLoading = false }) 
             )}
           </div>
 
-          {parsing && (
+          {isProcessing && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Parsing resume...</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{statusMessage}</span>
                 <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {Math.round(progress)}%
+                  {Math.round(currentProgress)}%
                 </span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-purple-600 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${currentProgress}%` }}
                 />
               </div>
             </div>

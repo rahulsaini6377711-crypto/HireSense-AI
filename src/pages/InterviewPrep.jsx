@@ -618,6 +618,20 @@ const InterviewPrep = () => {
                               <span className="font-bold text-blue-600 dark:text-blue-450 uppercase text-[10px]">Evaluation Criteria</span>
                               <p className="text-gray-700 dark:text-gray-300 mt-1">{q.evaluationCriteria}</p>
                             </div>
+                            {q.evaluationRubric && (
+                              <div className="border-t border-gray-200 dark:border-gray-800 pt-2.5">
+                                <span className="font-bold text-purple-600 dark:text-purple-450 uppercase text-[10px]">Evaluation Rubric</span>
+                                <p className="text-gray-700 dark:text-gray-300 mt-1">{q.evaluationRubric}</p>
+                              </div>
+                            )}
+                            {q.hints && q.hints.length > 0 && (
+                              <div className="border-t border-gray-200 dark:border-gray-800 pt-2.5">
+                                <span className="font-bold text-amber-600 dark:text-amber-450 uppercase text-[10px]">Hints & Suggestions</span>
+                                <p className="text-gray-700 dark:text-gray-300 mt-1 italic">
+                                  {Array.isArray(q.hints) ? q.hints.join(' | ') : q.hints}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </motion.div>
                       )}

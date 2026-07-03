@@ -24,6 +24,13 @@ const SavedJobMatches = React.lazy(() => import('../pages/SavedJobMatches'));
 const InterviewHistory = React.lazy(() => import('../pages/InterviewHistory'));
 const NotFound = React.lazy(() => import('../pages/NotFound'));
 
+// SaaS Features
+const ResumeBuilder = React.lazy(() => import('../pages/ResumeBuilder'));
+const CoverLetter = React.lazy(() => import('../pages/CoverLetter'));
+const LinkedInOptimizer = React.lazy(() => import('../pages/LinkedInOptimizer'));
+const VoiceInterview = React.lazy(() => import('../pages/VoiceInterview'));
+const CodingInterview = React.lazy(() => import('../pages/CodingInterview'));
+
 // Admin Pages
 const AdminDashboard = React.lazy(() => import('../pages/admin/AdminDashboard'));
 const AdminUsers = React.lazy(() => import('../pages/admin/AdminUsers'));
@@ -172,6 +179,62 @@ const AppRoutes = () => {
               <ProtectedRoute>
                 <DashboardLayout>
                   <UserSettings />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* SaaS Routes */}
+          <Route
+            path="/resume-builder"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <ResumeBuilder />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/cover-letter"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CoverLetter />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/linkedin-optimizer"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <LinkedInOptimizer />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/voice-interview"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <VoiceInterview />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/coding-interview"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <CodingInterview />
                 </DashboardLayout>
               </ProtectedRoute>
             }

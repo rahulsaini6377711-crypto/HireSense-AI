@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { 
   FiArrowLeft, FiPlay, FiMaximize2, FiMinimize2, FiClock, 
   FiCheck, FiChevronRight, FiChevronLeft, FiSend, FiLoader, 
-  FiAward, FiX, FiCheckCircle, FiSkipForward 
+  FiAward, FiX, FiCheckCircle, FiSkipForward, FiCpu 
 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../services/firebase';
@@ -609,6 +609,19 @@ const MockInterview = () => {
                       )}
                     </div>
                   </motion.div>
+                ) : evaluating ? (
+                  <div className="bg-gray-50/50 dark:bg-gray-900/20 border border-dashed border-gray-250 dark:border-gray-850 rounded-3xl p-8 text-center min-h-[300px] flex flex-col justify-center items-center">
+                    <FiLoader className="text-blue-500 w-12 h-12 mb-3 animate-spin" />
+                    <h4 className="font-bold text-gray-650 dark:text-gray-400 text-sm">AI Grading in progress</h4>
+                    <p className="text-xs text-gray-500 max-w-[200px] mt-1.5 mb-3">
+                      Gemini is generating feedback on your answer.
+                    </p>
+                    <div className="flex gap-1.5 justify-center items-center">
+                      <span className="w-2 bg-blue-500 h-2 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                      <span className="w-2 bg-blue-500 h-2 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                      <span className="w-2 bg-blue-500 h-2 rounded-full animate-bounce" />
+                    </div>
+                  </div>
                 ) : (
                   <div className="bg-gray-50/50 dark:bg-gray-900/20 border border-dashed border-gray-250 dark:border-gray-850 rounded-3xl p-8 text-center min-h-[300px] flex flex-col justify-center items-center">
                     <FiCpu className="text-gray-300 dark:text-gray-700 w-12 h-12 mb-3 animate-pulse" />

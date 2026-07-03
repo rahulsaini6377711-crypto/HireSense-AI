@@ -1,285 +1,146 @@
-# HireSense AI - AI-Powered Resume Analysis & Interview Preparation Platform
+# HireSense AI - Technical Documentation & Deployment Guide
 
-A modern, production-ready web application for analyzing resumes, improving ATS scores, and preparing for interviews using AI technology.
-
-## 🚀 Features
-
-- **Resume Analysis**: Get AI-powered insights on your resume
-- **ATS Score**: Check your resume's Applicant Tracking System compatibility
-- **Interview Preparation**: Practice with AI-generated interview questions
-- **Job Matcher**: Find jobs that match your skills and experience
-- **User Authentication**: Secure Firebase authentication
-- **Dark Mode**: Modern dark mode support
-- **Responsive Design**: Works perfectly on all devices
-- **Smooth Animations**: Beautiful Framer Motion animations
-- **Real-time Notifications**: React Hot Toast notifications
-
-## 📋 Tech Stack
-
-- **Frontend Framework**: React 19
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **Routing**: React Router DOM v6
-- **Backend**: Firebase
-- **Animations**: Framer Motion
-- **Icons**: React Icons
-- **Charts**: Recharts
-- **Notifications**: React Hot Toast
-
-## 📁 Project Structure
-
-```
-src/
-├── assets/                 # Static assets
-├── components/             # Reusable components
-│   ├── Navbar.jsx
-│   ├── Sidebar.jsx
-│   ├── Footer.jsx
-│   ├── ProtectedRoute.jsx
-│   ├── LoadingSpinner.jsx
-│   ├── ScoreCard.jsx
-│   ├── ResumeUploader.jsx
-│   └── InterviewCard.jsx
-├── pages/                  # Page components
-│   ├── Home.jsx
-│   ├── Login.jsx
-│   ├── Register.jsx
-│   ├── Dashboard.jsx
-│   ├── ResumeAnalysis.jsx
-│   ├── InterviewPrep.jsx
-│   ├── JobMatcher.jsx
-│   ├── Profile.jsx
-│   └── NotFound.jsx
-├── context/                # React Context
-│   └── AuthContext.jsx
-├── hooks/                  # Custom hooks
-│   └── useAuth.js
-├── services/               # API services
-│   ├── firebase.js
-│   ├── openai.js
-│   ├── resumeParser.js
-│   └── api.js
-├── routes/                 # Route configuration
-│   └── AppRoutes.jsx
-├── utils/                  # Utility functions
-│   ├── constants.js
-│   ├── helpers.js
-│   └── validators.js
-├── layouts/                # Layout components
-│   ├── MainLayout.jsx
-│   └── DashboardLayout.jsx
-├── App.jsx                 # Main app component
-├── main.jsx                # Entry point
-└── index.css               # Global styles
-```
-
-## 🛠️ Installation
-
-### Prerequisites
-- Node.js 16+ 
-- npm or yarn
-
-### Setup Instructions
-
-1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd hiresense-ai
-```
-
-2. **Install dependencies**
-```bash
-npm install
-```
-
-3. **Environment Configuration**
-```bash
-cp .env.example .env.local
-```
-
-Edit `.env.local` with your Firebase credentials and API configuration:
-
-```
-VITE_FIREBASE_API_KEY=your_key_here
-VITE_FIREBASE_AUTH_DOMAIN=your_domain_here
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_API_BASE_URL=http://localhost:3000/api
-```
-
-4. **Start development server**
-```bash
-npm run dev
-```
-
-The application will open at `http://localhost:5173`
-
-## 📦 Available Scripts
-
-```bash
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build locally
-npm run preview
-
-# Run linter
-npm run lint
-```
-
-## 🔐 Authentication
-
-The application uses Firebase Authentication with support for:
-- Email/Password registration
-- Email/Password login
-- Session persistence
-- Protected routes
-
-## 🎨 Styling
-
-- **Tailwind CSS**: Utility-first CSS framework
-- **Dark Mode**: Built-in dark mode support using Tailwind's dark mode class
-- **Custom Animations**: Tailwind animations + Framer Motion
-- **Responsive**: Mobile-first responsive design
-
-## 🔌 Firebase Setup
-
-1. Create a Firebase project at [firebase.google.com](https://firebase.google.com)
-2. Enable Authentication (Email/Password)
-3. Copy your credentials
-4. Add credentials to `.env.local`
-
-## 📱 Pages Overview
-
-### Public Pages
-- **Home**: Landing page with features and CTA
-- **Login**: User login page
-- **Register**: User registration page
-
-### Protected Pages
-- **Dashboard**: Overview of user statistics and quick actions
-- **Resume Analysis**: Upload and analyze resume with ATS score
-- **Interview Prep**: Practice interview questions by role
-- **Job Matcher**: Find matching jobs based on skills
-- **Profile**: Manage user profile and account settings
-
-## 🎯 Component Architecture
-
-### Components
-- **Navbar**: Navigation with authentication state
-- **Sidebar**: Dashboard navigation menu
-- **Footer**: Application footer
-- **ProtectedRoute**: Route guard for authenticated users
-- **LoadingSpinner**: Loading state indicator
-- **ScoreCard**: Display scores with animations
-- **ResumeUploader**: File upload with drag-and-drop
-- **InterviewCard**: Interview practice card component
-
-### Layouts
-- **MainLayout**: Standard layout with Navbar and Footer
-- **DashboardLayout**: Dashboard layout with Navbar and Sidebar
-
-## 🔄 Data Flow
-
-1. **Authentication**: AuthContext manages user state
-2. **Protected Routes**: useAuth hook checks authentication status
-3. **Services**: API calls through centralized service layer
-4. **Components**: Display data and handle user interactions
-5. **Notifications**: Toast notifications for feedback
-
-## 🚀 Deployment
-
-### Build for Production
-```bash
-npm run build
-```
-
-This creates an optimized production build in the `dist` folder.
-
-### Deploy to Vercel
-```bash
-npm install -g vercel
-vercel
-```
-
-### Deploy to Netlify
-```bash
-npm install -g netlify-cli
-netlify deploy
-```
-
-## 📝 Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_FIREBASE_API_KEY` | Firebase API key |
-| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
-| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
-| `VITE_FIREBASE_APP_ID` | Firebase app ID |
-| `VITE_API_BASE_URL` | API base URL |
-
-## 🔐 Security
-
-- Protected routes for authenticated users
-- Firebase security rules in backend
-- Secure password validation
-- HTTPS recommended for production
-- Environment variables for sensitive data
-
-## 📊 Performance
-
-- Code splitting with React Router
-- Image optimization
-- CSS minification
-- JavaScript minification
-- Lazy loading of routes
-
-## 🎓 Learning Resources
-
-- [React Documentation](https://react.dev)
-- [Vite Guide](https://vitejs.dev)
-- [Tailwind CSS](https://tailwindcss.com)
-- [Firebase Documentation](https://firebase.google.com/docs)
-- [Framer Motion](https://www.framer.com/motion/)
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🎯 Future Enhancements
-
-- [ ] Video interview practice
-- [ ] Resume template library
-- [ ] Salary insights
-- [ ] LinkedIn integration
-- [ ] Email notifications
-- [ ] Advanced analytics dashboard
-- [ ] Team collaboration features
-- [ ] Mobile app
-
-## 📞 Support
-
-For support, please open an issue on GitHub or contact support@hiresense.ai
-
-## 🙏 Acknowledgments
-
-- React team for the amazing framework
-- Vite for the fast build tool
-- Tailwind CSS for utility-first CSS
-- Firebase for backend services
-- All contributors and users
+HireSense AI is a React + Firebase client-side platform designed to parse resumes, perform automated ATS scoring and job matching, and evaluate candidate performance using mock interviews graded by Gemini AI.
 
 ---
 
-**Made with ❤️ by HireSense AI**
+## 1. System Architecture
+
+```mermaid
+graph TD
+  User[Client Browser] --> AuthContext[Auth Context]
+  User --> ThemeContext[Theme Context]
+  User --> NotificationContext[Notification Context]
+
+  subgraph Client App
+    AuthContext --> RouteGuard[ProtectedRoute / AdminRoute]
+    RouteGuard --> Pages[Pages / Components]
+    Pages --> PDFParser[resumeParser.js - pdf.js worker]
+    Pages --> GeminiService[geminiService.js - Gemini API]
+    Pages --> FirestoreHelper[firestoreHelper.js - Cache Wrapper]
+  end
+
+  subgraph Cloud Backend (Firebase)
+    FirestoreHelper --> Firestore[(Cloud Firestore)]
+    Pages --> Storage[(Firebase Storage)]
+    AuthContext --> FirebaseAuth[Firebase Authentication]
+  end
+
+  subgraph AI Orchestration (Google AI)
+    GeminiService --> GeminiAPI[Gemini 1.5 Flash Model]
+  end
+```
+
+---
+
+## 2. Folder Structure
+
+```
+HireSense AI/
+├── dist/                  # Compiled production bundles
+├── public/                # Static public assets
+├── src/
+│   ├── components/        # Reusable UI widgets and layout views
+│   │   ├── admin/         # Administrative route control views
+│   │   ├── AtsScoreCard   # Renders resume ATS evaluations
+│   │   └── ProtectedRoute # Route verification guards
+│   ├── context/           # React State context providers (Auth, Theme, Notifications)
+│   ├── hooks/             # Reactive custom hooks (useAuth, useSEO, etc.)
+│   ├── pages/             # Route-level views (Dashboard, ResumeAnalysis, MockInterview, JobMatcher)
+│   ├── routes/            # React-Router mappings
+│   ├── services/          # Firebase integration APIs & Gemini endpoints
+│   │   ├── firebase.js    # Firestore persistent cache initialization
+│   │   ├── geminiService  # Reusable Gemini REST API handler
+│   │   └── userService.js # User role validations and fallbacks
+│   ├── utils/             # Functional modules (PDF generation, CSV exporters)
+│   │   └── firestoreHelper.js # Timeout wrapper with retries & cache checks
+│   ├── App.jsx            # Core application entry
+│   ├── index.css          # Style setups
+│   └── main.jsx           # App mount anchor
+├── firestore.rules        # Production Firestore database rules
+├── firestore.indexes.json # Index setups for createdAt collections
+├── firebase.json          # Hosting configuration mapping for Firebase
+├── vercel.json            # Deployment routing mapping for Vercel
+├── vite.config.js         # Modular manual chunk configuration
+└── package.json           # Scripts and package manifests
+```
+
+---
+
+## 3. Environment Setup
+
+To run this project, configure a `.env` file in the root directory.
+
+```bash
+# Firebase Credentials (Vite requires VITE_ prefix for client exposure)
+VITE_FIREBASE_API_KEY=AIzaSyCPViiXkhxQ4KhX_CZHxvpEGGGfY_rqPW8
+VITE_FIREBASE_AUTH_DOMAIN=hiresense-ai-4d791.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=hiresense-ai-4d791
+VITE_FIREBASE_STORAGE_BUCKET=hiresense-ai-4d791.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=738270486650
+VITE_FIREBASE_APP_ID=1:738270486650:web:9deb9fb8eede17129edbc3
+VITE_FIREBASE_MEASUREMENT_ID=G-687FBD9W5Y
+
+# Admin Email Registries (comma separated string)
+VITE_ADMIN_EMAILS=rahulsaini6377711@gmail.com,admin@hiresense.ai
+
+# Google Gemini API Credentials
+VITE_GEMINI_API_KEY=AIzaSyYourGeminiApiKeyHere
+```
+
+---
+
+## 4. Production Optimizations
+
+The application implements standard React & build optimizations:
+- **Code Splitting & Lazy Loading**: All route endpoints in `AppRoutes.jsx` utilize `React.lazy()` and `Suspense` loaders to split JS entry bundles.
+- **Vite Asset Chunks**: Recharts, jsPDF, Framer Motion, and Firebase are compiled as separate vendor chunks (using `vite.config.js`), reducing initial loading times.
+- **Web Worker Porting**: pdf.js worker assets are imported locally via Vite asset queries (`?url`), eliminating CORS conflicts and "fake worker" console warnings.
+- **Robust Database Helper**: `firestoreHelper.js` encapsulates Firestore calls, offering **3 attempts of exponential backoff retry** and **4-second timeout limits**, falling back to offline Firestore Cache (`getDocFromCache`) seamlessly.
+
+---
+
+## 5. Deployment Guide
+
+### A. Deploying to Vercel
+Vercel handles routing redirects for single-page applications via `vercel.json` (already present in the repository).
+
+1. Install the Vercel CLI locally:
+   ```bash
+   npm install -g vercel
+   ```
+2. Authenticate and link your project:
+   ```bash
+   vercel login
+   vercel link
+   ```
+3. Set your production environment variables inside the Vercel dashboard:
+   * Go to **Project Settings** > **Environment Variables** and add all variables listed in the Environment Setup section.
+4. Deploy the build:
+   ```bash
+   vercel --prod
+   ```
+
+### B. Deploying to Firebase Hosting
+Firebase is configured via `firebase.json` and `.firebaserc` (already present in the repository).
+
+1. Install the Firebase CLI:
+   ```bash
+   npm install -g firebase-tools
+   ```
+2. Log into your Firebase account:
+   ```bash
+   firebase login
+   ```
+3. Initialize the deployment target (our project `hiresense-ai-4d791` is default):
+   ```bash
+   firebase use default
+   ```
+4. Build the production build locally:
+   ```bash
+   npm run build
+   ```
+5. Deploy Hosting targets:
+   ```bash
+   firebase deploy --only hosting
+   ```

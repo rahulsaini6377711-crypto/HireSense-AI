@@ -1,5 +1,5 @@
 import { auth, db, storage } from './firebase';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { collection, doc, query, where } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { logActivity } from './activityLogService';
@@ -18,7 +18,7 @@ import {
  * @param {Object} resumeData - Parsed resume data
  * @returns {Promise<Object>} Resume document data with ID
  */
-export const uploadResume = async (file, userId, resumeData) => {
+export const uploadResume = async (file, userId, resumeData, onProgress = null) => {
   try {
     if (!auth.currentUser) {
       throw new Error('User not authenticated');
@@ -28,12 +28,21 @@ export const uploadResume = async (file, userId, resumeData) => {
       throw new Error('User ID mismatch');
     }
 
-    // Upload to Firebase Storage
+    // Upload to Firebase Storage using resumable upload
     const timestamp = Date.now();
     const storagePath = `resumes/${userId}/${timestamp}_${file.name}`;
     const storageRef = ref(storage, storagePath);
 
-    const snapshot = await uploadBytes(storageRef, file);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    if (onProgress) {
+      uploadTask.on('state_changed', (snapshot) => {
+        const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        onProgress(pct);
+      });
+    }
+
+    const snapshot = await uploadTask;
     const downloadURL = await getDownloadURL(snapshot.ref);
 
     // Save metadata to Firestore using safeAddDoc

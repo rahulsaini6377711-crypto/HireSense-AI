@@ -1,6 +1,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FiHome, FiFileText, FiBriefcase, FiUsers, FiSettings, FiUser, FiBookmark, FiAward } from 'react-icons/fi';
+import { 
+  FiHome, FiFileText, FiBriefcase, FiUsers, FiSettings, FiUser, 
+  FiBookmark, FiAward, FiEdit3, FiMail, FiShare2, FiMic, FiCode 
+} from 'react-icons/fi';
 import { motion } from 'framer-motion';
 
 const Sidebar = () => {
@@ -9,7 +12,12 @@ const Sidebar = () => {
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: FiHome },
     { name: 'Resume Analysis', path: '/resume-analysis', icon: FiFileText },
+    { name: 'AI Resume Builder', path: '/resume-builder', icon: FiEdit3 },
+    { name: 'Cover Letter Gen', path: '/cover-letter', icon: FiMail },
+    { name: 'LinkedIn Optimizer', path: '/linkedin-optimizer', icon: FiShare2 },
     { name: 'Interview Prep', path: '/interview-prep', icon: FiBriefcase },
+    { name: 'Voice Interview', path: '/voice-interview', icon: FiMic },
+    { name: 'Coding Practice', path: '/coding-interview', icon: FiCode },
     { name: 'Interview Logs', path: '/interview-history', icon: FiAward },
     { name: 'Job Matcher', path: '/job-matcher', icon: FiUsers },
     { name: 'Saved Jobs', path: '/saved-jobs', icon: FiBookmark },

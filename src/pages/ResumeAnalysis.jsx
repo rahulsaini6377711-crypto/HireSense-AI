@@ -7,7 +7,7 @@ import ResumeUploadZone from '../components/ResumeUploadZone';
 import ResumePreview from '../components/ResumePreview';
 import { uploadResume, getUserResumes, saveAnalysisResult, getUserAnalyses, deleteAnalysis } from '../services/resumeStorage';
 import { extractResumeInfo } from '../services/resumeParser';
-import { analyzeResume } from '../services/aiAnalyzer';
+import { analyzeResumeWithGemini } from '../services/geminiService';
 import AtsScoreCard from '../components/AtsScoreCard';
 import EmailReportModal from '../components/EmailReportModal';
 import { generateResumeAnalysisPDF } from '../utils/pdfGenerator';
@@ -28,14 +28,33 @@ const ResumeAnalysis = () => {
   const [loadingResumes, setLoadingResumes] = useState(true);
   const [activeTab, setActiveTab] = useState('upload');
   
+  // Progress states
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [statusText, setStatusText] = useState('');
+  
   // History report viewer states
   const [selectedAnalysis, setSelectedAnalysis] = useState(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
-  // Load user's resumes and analysis reports on mount
+  // Load user's resumes and analysis reports on mount, plus cached parsed resume
   useEffect(() => {
     if (user?.uid) {
       loadUserResumes();
+      
+      const cached = localStorage.getItem(`hiresense_parsed_resume_${user.uid}`);
+      if (cached) {
+        try {
+          const { parsed, info, analysis, fileSelect } = JSON.parse(cached);
+          setParsedResume(parsed);
+          setExtractedInfo(info);
+          setAnalysisResult(analysis);
+          if (fileSelect) {
+            setUploadedFile(fileSelect);
+          }
+        } catch (e) {
+          console.error("Error loading cached parsed resume:", e);
+        }
+      }
     }
   }, [user]);
 
@@ -62,6 +81,9 @@ const ResumeAnalysis = () => {
     setParsedResume(null);
     setExtractedInfo(null);
     setAnalysisResult(null);
+    if (user?.uid) {
+      localStorage.removeItem(`hiresense_parsed_resume_${user.uid}`);
+    }
   };
 
   const handleParseComplete = async (resumeData) => {
@@ -73,11 +95,21 @@ const ResumeAnalysis = () => {
 
     // Compute local AI analysis
     try {
-      const analysis = analyzeResume(resumeData.text);
+      const analysis = await analyzeResumeWithGemini(resumeData.text);
       setAnalysisResult(analysis);
 
-      // Try to upload to Firebase
+      // Cache parsed resume
       if (user?.uid) {
+        localStorage.setItem(
+          `hiresense_parsed_resume_${user.uid}`,
+          JSON.stringify({
+            parsed: resumeData,
+            info,
+            analysis,
+            fileSelect: uploadedFile ? { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type } : null
+          })
+        );
+        
         await handleUploadToFirebase(resumeData, analysis);
       }
     } catch (err) {
@@ -91,13 +123,22 @@ const ResumeAnalysis = () => {
 
     try {
       setIsUploading(true);
-      // Upload PDF file to storage and log metadata in resumes collection
-      await uploadResume(uploadedFile, user.uid, resumeData);
+      setStatusText('Uploading resume file to secure storage...');
+      setUploadProgress(0);
+      
+      // Upload PDF file to storage and log metadata in resumes collection with progress listener
+      await uploadResume(uploadedFile, user.uid, resumeData, (pct) => {
+        setUploadProgress(pct);
+      });
+      
+      setStatusText('Saving AI analysis report to database...');
+      setUploadProgress(95);
       
       // Save computed AI Analysis to Firestore resume_analysis collection
-      const targetAnalysis = analysis || analysisResult || analyzeResume(resumeData.text);
+      const targetAnalysis = analysis || analysisResult || await analyzeResumeWithGemini(resumeData.text);
       await saveAnalysisResult(user.uid, targetAnalysis, uploadedFile.name);
       
+      setUploadProgress(100);
       toast.success('Resume and AI Analysis saved successfully!');
       addNotification(
         'Resume Analyzed',
@@ -112,6 +153,8 @@ const ResumeAnalysis = () => {
       toast.error(error.message || 'Failed to save resume analysis');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
+      setStatusText('');
     }
   };
 
@@ -226,6 +269,8 @@ const ResumeAnalysis = () => {
                     onFileSelect={handleFileSelect}
                     onParseComplete={handleParseComplete}
                     isLoading={isUploading}
+                    externalProgress={isUploading ? uploadProgress : null}
+                    externalStatus={isUploading ? statusText : null}
                   />
                 </div>
 
@@ -319,6 +364,7 @@ const ResumeAnalysis = () => {
                     <div className="space-y-4">
                       {userAnalyses.map((report) => {
                         const date = report.createdAt?.toDate ? report.createdAt.toDate().toLocaleDateString() : new Date(report.createdAt || 0).toLocaleDateString();
+                        const matchingResume = userResumes.find(r => r.originalFileName === report.fileName || r.fileName === report.fileName);
                         return (
                           <motion.div
                             key={report.id}
@@ -330,7 +376,7 @@ const ResumeAnalysis = () => {
                               <h3 className="font-bold text-gray-900 dark:text-white truncate">
                                 {report.fileName || 'Resume Report'}
                               </h3>
-                              <div className="flex flex-wrap gap-3 mt-2 text-xs font-semibold text-gray-500 dark:text-gray-450">
+                              <div className="flex flex-wrap gap-3 mt-2 text-xs font-semibold text-gray-550 dark:text-gray-450">
                                 <span>📅 Analyzed: {date}</span>
                                 <span>🎯 Overall: {report.overallRating || 'N/A'}</span>
                                 <span>🛠️ Skills detected: {report.skills?.length || 0}</span>
@@ -346,13 +392,26 @@ const ResumeAnalysis = () => {
                                 <span className="text-[9px] uppercase tracking-wider text-gray-450 font-bold">ATS Score</span>
                               </div>
                               <div className="flex items-center gap-1.5">
+                                {matchingResume && (
+                                  <a
+                                    href={matchingResume.storageUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="p-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 rounded-lg border border-emerald-250 dark:border-emerald-900/30 transition flex items-center justify-center"
+                                    title="Download Original Resume PDF"
+                                    style={{ height: '34px', width: '34px' }}
+                                  >
+                                    📄
+                                  </a>
+                                )}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     generateResumeAnalysisPDF(getNormalizedAnalysis(report), report.fileName + '_report.pdf');
                                   }}
-                                  className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 rounded-lg text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 transition"
-                                  title="Download PDF"
+                                  className="p-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-850 dark:hover:bg-gray-750 rounded-lg text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 transition"
+                                  title="Download Report PDF"
                                 >
                                   <FiDownload size={14} />
                                 </button>
@@ -373,34 +432,49 @@ const ResumeAnalysis = () => {
                 ) : (
                   /* Detail Report View */
                   <div className="space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-750 pb-4">
-                      <button
-                        onClick={() => setSelectedAnalysis(null)}
-                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
-                      >
-                        <FiArrowLeft /> Back to Saved Lists
-                      </button>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => generateResumeAnalysisPDF(getNormalizedAnalysis(selectedAnalysis), selectedAnalysis.fileName + '_analysis.pdf')}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow transition"
-                        >
-                          <FiDownload /> Download PDF
-                        </button>
-                        <button
-                          onClick={() => setIsEmailModalOpen(true)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow transition"
-                        >
-                          <FiMail /> Email PDF
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteReport(e, selectedAnalysis.id)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow transition"
-                        >
-                          <FiTrash2 /> Delete
-                        </button>
-                      </div>
-                    </div>
+                    {(() => {
+                      const matchingResume = userResumes.find(r => r.originalFileName === selectedAnalysis.fileName || r.fileName === selectedAnalysis.fileName);
+                      return (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-750 pb-4">
+                          <button
+                            onClick={() => setSelectedAnalysis(null)}
+                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition"
+                          >
+                            <FiArrowLeft /> Back to Saved Lists
+                          </button>
+                          <div className="flex gap-2">
+                            {matchingResume && (
+                              <a
+                                href={matchingResume.storageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-750 text-white text-xs font-bold rounded-xl shadow transition"
+                              >
+                                📄 Download Original PDF
+                              </a>
+                            )}
+                            <button
+                              onClick={() => generateResumeAnalysisPDF(getNormalizedAnalysis(selectedAnalysis), selectedAnalysis.fileName + '_analysis.pdf')}
+                              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow transition"
+                            >
+                              <FiDownload /> Download Report PDF
+                            </button>
+                            <button
+                              onClick={() => setIsEmailModalOpen(true)}
+                              className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow transition"
+                            >
+                              <FiMail /> Email PDF
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteReport(e, selectedAnalysis.id)}
+                              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow transition"
+                            >
+                              <FiTrash2 /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     
                     <AtsScoreCard analysis={getNormalizedAnalysis(selectedAnalysis)} />
                   </div>

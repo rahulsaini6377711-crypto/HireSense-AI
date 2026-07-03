@@ -62,10 +62,10 @@ export const createUserProfile = async (uid, { email, name }) => {
   return profile;
 };
 
-export const getUserProfile = async (uid) => {
+export const getUserProfile = async (uid, timeoutMs = 4000) => {
   const userRef = doc(db, USERS_COLLECTION, uid);
   try {
-    const snapshot = await safeGetDoc(userRef);
+    const snapshot = await safeGetDoc(userRef, timeoutMs);
     if (!snapshot.exists()) return null;
     return { id: snapshot.id, ...snapshot.data() };
   } catch (error) {
@@ -98,7 +98,7 @@ export const ensureUserProfile = async (firebaseUser, name) => {
   let fetchFailed = false;
 
   try {
-    existing = await getUserProfile(firebaseUser.uid);
+    existing = await getUserProfile(firebaseUser.uid, 1500); // 1.5s timeout for fast login
   } catch (error) {
     console.warn("Failed to fetch existing user profile, proceeding with offline fallback profile generation:", error.message);
     fetchFailed = true;
