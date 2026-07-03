@@ -1,3 +1,5 @@
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
+
 let pdfjsLib = null;
 
 const loadPdfJs = async () => {
@@ -5,10 +7,7 @@ const loadPdfJs = async () => {
   
   // Dynamically import pdfjs-dist to prevent it from bloat-loading the main bundle
   pdfjsLib = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url
-  ).toString();
+  pdfjsLib.GlobalWorkerOptions.workerPort = new pdfjsWorker();
   return pdfjsLib;
 };
 

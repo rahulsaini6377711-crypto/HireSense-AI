@@ -1,7 +1,8 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../services/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
+import { safeUpdateDoc } from '../utils/firestoreHelper';
 
 export const ThemeContext = createContext();
 
@@ -42,7 +43,7 @@ export const ThemeProvider = ({ children }) => {
     if (user?.uid) {
       try {
         const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
+        await safeUpdateDoc(userRef, {
           theme: newTheme,
           updatedAt: new Date()
         });

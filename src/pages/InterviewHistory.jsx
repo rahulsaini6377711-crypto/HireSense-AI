@@ -6,7 +6,8 @@ import { getUserInterviewSessions } from '../services/resumeStorage';
 import { generateInterviewSessionPDF } from '../utils/pdfGenerator';
 import EmailReportModal from '../components/EmailReportModal';
 import { db } from '../services/firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
+import { safeDeleteDoc } from '../utils/firestoreHelper';
 import toast from 'react-hot-toast';
 import { useSEO } from '../hooks/useSEO';
 
@@ -41,7 +42,7 @@ const InterviewHistory = () => {
     e.stopPropagation();
     if (!window.confirm('Delete this completed interview session log?')) return;
     try {
-      await deleteDoc(doc(db, 'interview_sessions', id));
+      await safeDeleteDoc(doc(db, 'interview_sessions', id));
       toast.success('Interview session log removed');
       setSessions(prev => prev.filter(s => s.id !== id));
       if (selectedSession?.id === id) {

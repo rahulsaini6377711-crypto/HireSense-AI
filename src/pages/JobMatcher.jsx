@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FiMapPin, FiDollarSign, FiCheck, FiX, FiInfo } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
-import { getLatestAnalysisResult, saveJobMatch } from '../services/resumeStorage';
+import { getLatestAnalysisResult, saveJobMatch, getUserJobMatches } from '../services/resumeStorage';
 import { Link } from 'react-router-dom';
 
 const JobMatcher = () => {
@@ -94,8 +94,19 @@ const JobMatcher = () => {
     const persistMatches = async () => {
       matchesSavedRef.current = true;
       try {
+        // Fetch existing job matches to avoid duplicate saving
+        const existingMatches = await getUserJobMatches(user.uid);
+        const existingKeys = new Set(
+          existingMatches.map(m => `${m.jobTitle || ''}_${m.company || ''}`.toLowerCase())
+        );
+
         await Promise.all(
           baseJobs.map(async (job) => {
+            const jobKey = `${job.title || ''}_${job.company || ''}`.toLowerCase();
+            if (existingKeys.has(jobKey)) {
+              return; // Skip duplicate saving
+            }
+
             const match = calculateJobMatch(job.tags);
             await saveJobMatch(user.uid, {
               jobTitle: job.title,

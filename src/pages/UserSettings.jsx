@@ -7,7 +7,8 @@ import { useNotifications } from '../hooks/useNotifications';
 import { updateUserProfile } from '../services/userService';
 import { exportJobMatchesToCSV, exportInterviewSessionsToCSV } from '../utils/csvExporter';
 import { db } from '../services/firebase';
-import { collection, query, where, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, writeBatch } from 'firebase/firestore';
+import { safeGetDocs } from '../utils/firestoreHelper';
 import toast from 'react-hot-toast';
 import { useSEO } from '../hooks/useSEO';
 
@@ -98,7 +99,7 @@ const UserSettings = () => {
       
       for (const colName of collectionsToClear) {
         const q = query(collection(db, colName), where('userId', '==', user.uid));
-        const snapshot = await getDocs(q);
+        const snapshot = await safeGetDocs(q);
         snapshot.forEach(docSnap => {
           batch.delete(docSnap.ref);
         });

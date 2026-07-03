@@ -16,6 +16,7 @@ const Dashboard = React.lazy(() => import('../pages/Dashboard'));
 const ResumeAnalysis = React.lazy(() => import('../pages/ResumeAnalysis'));
 const InterviewPrep = React.lazy(() => import('../pages/InterviewPrep'));
 const InterviewSession = React.lazy(() => import('../pages/InterviewSession'));
+const MockInterview = React.lazy(() => import('../pages/MockInterview'));
 const JobMatcher = React.lazy(() => import('../pages/JobMatcher'));
 const Profile = React.lazy(() => import('../pages/Profile'));
 const UserSettings = React.lazy(() => import('../pages/UserSettings'));
@@ -105,6 +106,17 @@ const AppRoutes = () => {
               <ProtectedRoute>
                 <DashboardLayout>
                   <InterviewSession />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mock-interview"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <MockInterview />
                 </DashboardLayout>
               </ProtectedRoute>
             }

@@ -5,7 +5,8 @@ import { useAuth } from '../hooks/useAuth';
 import { getUserJobMatches } from '../services/resumeStorage';
 import { exportJobMatchesToCSV } from '../utils/csvExporter';
 import { db } from '../services/firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
+import { safeDeleteDoc } from '../utils/firestoreHelper';
 import toast from 'react-hot-toast';
 import { useSEO } from '../hooks/useSEO';
 
@@ -39,7 +40,7 @@ const SavedJobMatches = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this job match recommendation?')) return;
     try {
-      await deleteDoc(doc(db, 'job_matches', id));
+      await safeDeleteDoc(doc(db, 'job_matches', id));
       toast.success('Job match deleted');
       setMatches(prev => prev.filter(m => m.id !== id));
     } catch (err) {

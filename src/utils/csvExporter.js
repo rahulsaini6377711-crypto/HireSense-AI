@@ -1,5 +1,6 @@
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { safeGetDocs } from '../utils/firestoreHelper';
 
 /**
  * Download a string as a CSV file in-browser
@@ -25,7 +26,7 @@ const downloadCSV = (csvContent, fileName) => {
 export const exportJobMatchesToCSV = async (userId) => {
   try {
     const q = query(collection(db, 'job_matches'), where('userId', '==', userId));
-    const snapshot = await getDocs(q);
+    const snapshot = await safeGetDocs(q);
     
     let csv = 'Job Title,Company,Location,Match Score,Date Calculated\n';
     
@@ -56,7 +57,7 @@ export const exportJobMatchesToCSV = async (userId) => {
 export const exportInterviewSessionsToCSV = async (userId) => {
   try {
     const q = query(collection(db, 'interview_sessions'), where('userId', '==', userId));
-    const snapshot = await getDocs(q);
+    const snapshot = await safeGetDocs(q);
     
     let csv = 'Role,Average Score,Grade,Performance Rating,Questions Answered,Date Completed\n';
     

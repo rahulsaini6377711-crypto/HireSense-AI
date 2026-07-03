@@ -1,8 +1,15 @@
 import { auth, db, storage } from './firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, getDoc } from 'firebase/firestore';
+import { collection, doc, query, where } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { logActivity } from './activityLogService';
+import {
+  safeGetDoc,
+  safeGetDocs,
+  safeUpdateDoc,
+  safeDeleteDoc,
+  safeAddDoc
+} from '../utils/firestoreHelper';
 
 /**
  * Upload resume to Firebase Storage and save metadata to Firestore
@@ -29,9 +36,9 @@ export const uploadResume = async (file, userId, resumeData) => {
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
 
-    // Save metadata to Firestore
+    // Save metadata to Firestore using safeAddDoc
     const resumesCollection = collection(db, 'resumes');
-    const resumeDoc = await addDoc(resumesCollection, {
+    const resumeDoc = await safeAddDoc(resumesCollection, {
       userId,
       fileName: resumeData.fileName,
       originalFileName: file.name,
@@ -73,7 +80,7 @@ export const getUserResumes = async (userId) => {
   try {
     const resumesCollection = collection(db, 'resumes');
     const q = query(resumesCollection, where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await safeGetDocs(q);
 
     const resumes = [];
     querySnapshot.forEach((doc) => {
@@ -98,7 +105,7 @@ export const getUserResumes = async (userId) => {
 export const getResume = async (resumeId) => {
   try {
     const resumeRef = doc(db, 'resumes', resumeId);
-    const resumeSnapshot = await getDoc(resumeRef);
+    const resumeSnapshot = await safeGetDoc(resumeRef);
 
     if (!resumeSnapshot.exists()) {
       throw new Error('Resume not found');
@@ -128,7 +135,7 @@ export const deleteResume = async (resumeId, storagePath) => {
 
     // Delete from Firestore
     const resumeRef = doc(db, 'resumes', resumeId);
-    await deleteDoc(resumeRef);
+    await safeDeleteDoc(resumeRef);
 
     toast.success('Resume deleted successfully');
   } catch (error) {
@@ -146,7 +153,7 @@ export const deleteResume = async (resumeId, storagePath) => {
 export const updateResumeMetadata = async (resumeId, updates) => {
   try {
     const resumeRef = doc(db, 'resumes', resumeId);
-    await updateDoc(resumeRef, {
+    await safeUpdateDoc(resumeRef, {
       ...updates,
       updatedAt: new Date()
     });
@@ -167,7 +174,7 @@ export const updateResumeMetadata = async (resumeId, updates) => {
 export const saveAnalysisResult = async (userId, analysisData, fileName = 'Resume') => {
   try {
     const analysisCollection = collection(db, 'resume_analysis');
-    const docRef = await addDoc(analysisCollection, {
+    const docRef = await safeAddDoc(analysisCollection, {
       userId,
       fileName,
       atsScore: analysisData.atsScore,
@@ -205,7 +212,7 @@ export const getLatestAnalysisResult = async (userId) => {
   try {
     const analysisCollection = collection(db, 'resume_analysis');
     const q = query(analysisCollection, where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await safeGetDocs(q);
 
     const reports = [];
     querySnapshot.forEach((doc) => {
@@ -240,7 +247,7 @@ export const getLatestAnalysisResult = async (userId) => {
 export const saveInterviewSession = async (userId, sessionData) => {
   try {
     const sessionsCollection = collection(db, 'interview_sessions');
-    const docRef = await addDoc(sessionsCollection, {
+    const docRef = await safeAddDoc(sessionsCollection, {
       userId,
       role: sessionData.role || 'general',
       avgScore: sessionData.avgScore || 0,
@@ -279,7 +286,7 @@ export const getUserInterviewSessions = async (userId) => {
   try {
     const sessionsCollection = collection(db, 'interview_sessions');
     const q = query(sessionsCollection, where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await safeGetDocs(q);
 
     const sessions = [];
     querySnapshot.forEach((doc) => {
@@ -308,7 +315,7 @@ export const getUserInterviewSessions = async (userId) => {
 export const saveJobMatch = async (userId, matchData) => {
   try {
     const matchesCollection = collection(db, 'job_matches');
-    const docRef = await addDoc(matchesCollection, {
+    const docRef = await safeAddDoc(matchesCollection, {
       userId,
       jobTitle: matchData.jobTitle || '',
       company: matchData.company || '',
@@ -346,7 +353,7 @@ export const getUserJobMatches = async (userId) => {
   try {
     const matchesCollection = collection(db, 'job_matches');
     const q = query(matchesCollection, where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await safeGetDocs(q);
 
     const matches = [];
     querySnapshot.forEach((docSnap) => {
@@ -375,7 +382,7 @@ export const getUserAnalyses = async (userId) => {
   try {
     const analysisCollection = collection(db, 'resume_analysis');
     const q = query(analysisCollection, where('userId', '==', userId));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await safeGetDocs(q);
 
     const analyses = [];
     querySnapshot.forEach((doc) => {
@@ -407,12 +414,10 @@ export const getUserAnalyses = async (userId) => {
 export const deleteAnalysis = async (analysisId) => {
   try {
     const analysisRef = doc(db, 'resume_analysis', analysisId);
-    await deleteDoc(analysisRef);
+    await safeDeleteDoc(analysisRef);
     toast.success('Analysis report deleted successfully');
   } catch (error) {
     console.error('Error deleting analysis:', error);
     throw error;
   }
 };
-
-

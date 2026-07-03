@@ -2,7 +2,6 @@ import {
   collection,
   query,
   where,
-  getDocs,
   getCountFromServer,
   getAggregateFromServer,
   average,
@@ -11,6 +10,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { safeGetDocs } from '../utils/firestoreHelper';
 
 const toDate = (value) => {
   if (!value) return null;
@@ -122,12 +122,12 @@ const fetchRecentDocuments = async (collectionName, maxDocs = 500) => {
       orderBy('createdAt', 'desc'),
       limit(maxDocs)
     );
-    const snapshot = await getDocs(q);
+    const snapshot = await safeGetDocs(q);
     const items = [];
     snapshot.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
     return items;
   } catch {
-    const snapshot = await getDocs(collection(db, collectionName));
+    const snapshot = await safeGetDocs(collection(db, collectionName));
     const items = [];
     snapshot.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
     return items;

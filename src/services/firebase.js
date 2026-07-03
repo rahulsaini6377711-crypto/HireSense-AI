@@ -10,7 +10,7 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Retrieve credentials from Vite environment variables, with fallback to default credentials
@@ -44,23 +44,14 @@ export {
   onAuthStateChanged,
 };
 
-// Initialize Firestore
-export const db = getFirestore(app);
+// Initialize Firestore with modern persistent local cache settings
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
 
 // Initialize Storage
 export const storage = getStorage(app);
-
-// Enable Firestore Cache Persistence for offline support
-if (typeof window !== 'undefined') {
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Firestore offline persistence failed: Multiple tabs open.');
-    } else if (err.code === 'unimplemented') {
-      console.warn('Firestore offline persistence not supported in this browser.');
-    } else {
-      console.error('Firestore offline persistence activation failed:', err);
-    }
-  });
-}
 
 export default app;

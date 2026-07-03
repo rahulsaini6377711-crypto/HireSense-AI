@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   auth,
   createUserWithEmailAndPassword,
@@ -17,6 +17,9 @@ export const AuthProvider = ({ children }) => {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Ref to track profile load status and prevent duplicate Firestore requests
+  const loadingProfileUidRef = useRef(null);
 
   const loadUserProfile = useCallback(async (firebaseUser) => {
     if (!firebaseUser) {
@@ -46,15 +49,26 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        try {
-          await loadUserProfile(currentUser);
-        } catch (err) {
-          console.error("onAuthStateChanged profile load error:", err);
+        // If we haven't loaded (or started loading) the profile for this UID, do it now
+        if (loadingProfileUidRef.current !== currentUser.uid) {
+          loadingProfileUidRef.current = currentUser.uid;
+          setLoading(true);
+          try {
+            await loadUserProfile(currentUser);
+          } catch (err) {
+            console.error("onAuthStateChanged profile load error:", err);
+          } finally {
+            setLoading(false);
+          }
+        } else {
+          // Already loading or loaded this profile
+          setLoading(false);
         }
       } else {
+        loadingProfileUidRef.current = null;
         setUserProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -68,6 +82,9 @@ export const AuthProvider = ({ children }) => {
       if (name) {
         await updateProfile(userCredential.user, { displayName: name });
       }
+
+      // Pre-set the ref so that onAuthStateChanged doesn't perform a duplicate fetch
+      loadingProfileUidRef.current = userCredential.user.uid;
 
       const profile = await ensureUserProfile(userCredential.user, name);
       setUser(userCredential.user);
@@ -83,19 +100,18 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const profile = await loadUserProfile(userCredential.user);
-      setUser(userCredential.user);
-      setUserProfile(profile);
+      // Do NOT load user profile here. Let onAuthStateChanged do it exactly once.
       return userCredential.user;
     } catch (err) {
       setError(err.message);
       throw err;
     }
-  }, [loadUserProfile]);
+  }, []);
 
   const logout = useCallback(async () => {
     try {
       setError(null);
+      loadingProfileUidRef.current = null;
       await signOut(auth);
       setUser(null);
       setUserProfile(null);
@@ -117,10 +133,15 @@ export const AuthProvider = ({ children }) => {
 
   const refreshUserProfile = useCallback(async () => {
     if (!user) return null;
-    const profile = await getUserProfile(user.uid);
-    setUserProfile(profile);
-    return profile;
-  }, [user]);
+    try {
+      const profile = await getUserProfile(user.uid);
+      setUserProfile(profile);
+      return profile;
+    } catch (err) {
+      console.warn("Failed to refresh user profile from Firestore:", err.message);
+      return userProfile;
+    }
+  }, [user, userProfile]);
 
   const value = {
     user,

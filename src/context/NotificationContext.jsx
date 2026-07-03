@@ -1,8 +1,14 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../services/firebase';
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, query, where, doc, writeBatch } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import {
+  safeGetDocs,
+  safeUpdateDoc,
+  safeDeleteDoc,
+  safeAddDoc
+} from '../utils/firestoreHelper';
 
 export const NotificationContext = createContext();
 
@@ -19,7 +25,7 @@ export const NotificationProvider = ({ children }) => {
         collection(db, 'notifications'),
         where('userId', '==', user.uid)
       );
-      const snapshot = await getDocs(q);
+      const snapshot = await safeGetDocs(q);
       const list = [];
       snapshot.forEach(docSnap => {
         list.push({ id: docSnap.id, ...docSnap.data() });
@@ -59,7 +65,7 @@ export const NotificationProvider = ({ children }) => {
 
     if (user?.uid) {
       try {
-        const docRef = await addDoc(collection(db, 'notifications'), {
+        const docRef = await safeAddDoc(collection(db, 'notifications'), {
           ...newNotification,
           userId: user.uid,
         });
@@ -96,7 +102,7 @@ export const NotificationProvider = ({ children }) => {
     if (user?.uid) {
       try {
         const notifRef = doc(db, 'notifications', id);
-        await updateDoc(notifRef, { read: true });
+        await safeUpdateDoc(notifRef, { read: true });
       } catch (error) {
         console.error('Failed to mark notification as read:', error);
       }
@@ -124,12 +130,9 @@ export const NotificationProvider = ({ children }) => {
 
   const clearAll = useCallback(async () => {
     setNotifications([]);
-    // In a real database we might delete them or set visibility to false.
-    // For this SaaS, we can delete them.
     if (user?.uid && notifications.length > 0) {
       try {
         const batch = writeBatch(db);
-        // We limit batch size to not fail, notifications list is usually small
         notifications.forEach(n => {
           const notifRef = doc(db, 'notifications', n.id);
           batch.delete(notifRef);

@@ -1,9 +1,5 @@
 import {
   doc,
-  setDoc,
-  getDoc,
-  getDocs,
-  deleteDoc,
   collection,
   query,
   orderBy,
@@ -12,6 +8,12 @@ import {
 import { ref, deleteObject, listAll } from 'firebase/storage';
 import { db, storage } from './firebase';
 import { logActivity } from './activityLogService';
+import {
+  safeGetDoc,
+  safeGetDocs,
+  safeSetDoc,
+  safeDeleteDoc
+} from '../utils/firestoreHelper';
 
 const USERS_COLLECTION = 'users';
 
@@ -40,41 +42,82 @@ export const createUserProfile = async (uid, { email, name }) => {
     updatedAt: new Date(),
   };
 
-  await setDoc(doc(db, USERS_COLLECTION, uid), profile);
+  try {
+    await safeSetDoc(doc(db, USERS_COLLECTION, uid), profile);
+  } catch (error) {
+    console.warn("Failed to write user profile document, offline persistence will queue this:", error.message);
+  }
 
-  await logActivity({
-    userId: uid,
-    userEmail: email,
-    action: 'user_registered',
-    details: { name, role },
-  });
+  try {
+    await logActivity({
+      userId: uid,
+      userEmail: email,
+      action: 'user_registered',
+      details: { name, role },
+    });
+  } catch (error) {
+    console.warn("Failed to log user registration activity offline:", error.message);
+  }
 
   return profile;
 };
 
 export const getUserProfile = async (uid) => {
-  const snapshot = await getDoc(doc(db, USERS_COLLECTION, uid));
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() };
+  const userRef = doc(db, USERS_COLLECTION, uid);
+  try {
+    const snapshot = await safeGetDoc(userRef);
+    if (!snapshot.exists()) return null;
+    return { id: snapshot.id, ...snapshot.data() };
+  } catch (error) {
+    console.warn("getUserProfile getDoc failed:", error.message);
+    throw error; // Propagate to let caller handle offline/timeout fallback
+  }
 };
 
 export const updateUserProfile = async (uid, updates) => {
   const userRef = doc(db, USERS_COLLECTION, uid);
-  await setDoc(userRef, {
-    ...updates,
-    updatedAt: new Date()
-  }, { merge: true });
+  try {
+    await safeSetDoc(userRef, {
+      ...updates,
+      updatedAt: new Date()
+    }, { merge: true });
 
-  await logActivity({
-    userId: uid,
-    userEmail: updates.email || '',
-    action: 'profile_updated',
-    details: { fields: Object.keys(updates) },
-  });
+    await logActivity({
+      userId: uid,
+      userEmail: updates.email || '',
+      action: 'profile_updated',
+      details: { fields: Object.keys(updates) },
+    });
+  } catch (error) {
+    console.warn("Failed to update user profile, offline persistence will queue this: ", error.message);
+  }
 };
 
 export const ensureUserProfile = async (firebaseUser, name) => {
-  const existing = await getUserProfile(firebaseUser.uid);
+  let existing = null;
+  let fetchFailed = false;
+
+  try {
+    existing = await getUserProfile(firebaseUser.uid);
+  } catch (error) {
+    console.warn("Failed to fetch existing user profile, proceeding with offline fallback profile generation:", error.message);
+    fetchFailed = true;
+  }
+
+  if (fetchFailed) {
+    // Return safe offline profile directly without setDoc to avoid overwriting actual server profile when coming back online.
+    return {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email || '',
+      name: name || firebaseUser.displayName || 'User',
+      role: resolveUserRole(firebaseUser.email),
+      status: 'active',
+      isOfflineFallback: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+  }
+
   if (existing) {
     if (existing.status === 'deleted') return null;
 
@@ -85,7 +128,11 @@ export const ensureUserProfile = async (firebaseUser, name) => {
         role: expectedRole,
         updatedAt: new Date(),
       };
-      await setDoc(doc(db, USERS_COLLECTION, firebaseUser.uid), updatedProfile);
+      try {
+        await safeSetDoc(doc(db, USERS_COLLECTION, firebaseUser.uid), updatedProfile, { merge: true });
+      } catch (err) {
+        console.warn("Failed to update user role, offline persistence will queue this:", err.message);
+      }
       return updatedProfile;
     }
 
@@ -99,23 +146,32 @@ export const ensureUserProfile = async (firebaseUser, name) => {
 };
 
 export const getAllUsers = async () => {
-  const q = query(collection(db, USERS_COLLECTION), orderBy('createdAt', 'desc'));
-  const snapshot = await getDocs(q);
-  const users = [];
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data();
-    if (data.status !== 'deleted') {
-      users.push({ id: docSnap.id, ...data });
-    }
-  });
-  return users;
+  try {
+    const q = query(collection(db, USERS_COLLECTION), orderBy('createdAt', 'desc'));
+    const snapshot = await safeGetDocs(q);
+    const users = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data.status !== 'deleted') {
+        users.push({ id: docSnap.id, ...data });
+      }
+    });
+    return users;
+  } catch (error) {
+    console.error("Failed to fetch all users:", error);
+    return [];
+  }
 };
 
 const deleteCollectionByUserId = async (collectionName, userId) => {
-  const q = query(collection(db, collectionName), where('userId', '==', userId));
-  const snapshot = await getDocs(q);
-  const deletions = snapshot.docs.map((docSnap) => deleteDoc(docSnap.ref));
-  await Promise.all(deletions);
+  try {
+    const q = query(collection(db, collectionName), where('userId', '==', userId));
+    const snapshot = await safeGetDocs(q);
+    const deletions = snapshot.docs.map((docSnap) => safeDeleteDoc(docSnap.ref));
+    await Promise.all(deletions);
+  } catch (error) {
+    console.error(`Failed to delete collection ${collectionName} for user:`, error);
+  }
 };
 
 const deleteUserStorage = async (userId) => {
@@ -143,7 +199,7 @@ export const deleteUser = async (userId, adminUser) => {
   await deleteCollectionByUserId('interview_sessions', userId);
   await deleteCollectionByUserId('job_matches', userId);
   await deleteUserStorage(userId);
-  await deleteDoc(doc(db, USERS_COLLECTION, userId));
+  await safeDeleteDoc(doc(db, USERS_COLLECTION, userId));
 
   await logActivity({
     userId: adminUser.uid,
@@ -157,58 +213,63 @@ export const deleteUser = async (userId, adminUser) => {
 };
 
 export const getUserReport = async (userId) => {
-  const profile = await getUserProfile(userId);
-  if (!profile) return null;
+  try {
+    const profile = await getUserProfile(userId);
+    if (!profile) return null;
 
-  const fetchByUser = async (collectionName) => {
-    const q = query(collection(db, collectionName), where('userId', '==', userId));
-    const snapshot = await getDocs(q);
-    const items = [];
-    snapshot.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
-    return items;
-  };
+    const fetchByUser = async (collectionName) => {
+      const q = query(collection(db, collectionName), where('userId', '==', userId));
+      const snapshot = await safeGetDocs(q);
+      const items = [];
+      snapshot.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
+      return items;
+    };
 
-  const [resumes, analyses, sessions, jobMatches] = await Promise.all([
-    fetchByUser('resumes'),
-    fetchByUser('resume_analysis'),
-    fetchByUser('interview_sessions'),
-    fetchByUser('job_matches'),
-  ]);
+    const [resumes, analyses, sessions, jobMatches] = await Promise.all([
+      fetchByUser('resumes'),
+      fetchByUser('resume_analysis'),
+      fetchByUser('interview_sessions'),
+      fetchByUser('job_matches'),
+    ]);
 
-  const sortByDate = (items) =>
-    [...items].sort((a, b) => {
-      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-      return dateB - dateA;
-    });
+    const sortByDate = (items) =>
+      [...items].sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+        return dateB - dateA;
+      });
 
-  const sortedAnalyses = sortByDate(analyses);
-  const avgAts =
-    analyses.length > 0
-      ? Math.round(analyses.reduce((sum, item) => sum + (item.atsScore || 0), 0) / analyses.length)
-      : 0;
-  const avgInterview =
-    sessions.length > 0
-      ? Math.round(sessions.reduce((sum, item) => sum + (item.avgScore || 0), 0) / sessions.length)
-      : 0;
-  const avgJobMatch =
-    jobMatches.length > 0
-      ? Math.round(jobMatches.reduce((sum, item) => sum + (item.matchScore || 0), 0) / jobMatches.length)
-      : 0;
+    const sortedAnalyses = sortByDate(analyses);
+    const avgAts =
+      analyses.length > 0
+        ? Math.round(analyses.reduce((sum, item) => sum + (item.atsScore || 0), 0) / analyses.length)
+        : 0;
+    const avgInterview =
+      sessions.length > 0
+        ? Math.round(sessions.reduce((sum, item) => sum + (item.avgScore || 0), 0) / sessions.length)
+        : 0;
+    const avgJobMatch =
+      jobMatches.length > 0
+        ? Math.round(jobMatches.reduce((sum, item) => sum + (item.matchScore || 0), 0) / jobMatches.length)
+        : 0;
 
-  return {
-    profile,
-    stats: {
-      resumeCount: resumes.length,
-      analysisCount: analyses.length,
-      sessionCount: sessions.length,
-      jobMatchCount: jobMatches.length,
-      avgAts,
-      avgInterview,
-      avgJobMatch,
-    },
-    latestAnalysis: sortedAnalyses[0] || null,
-    recentSessions: sortByDate(sessions).slice(0, 5),
-    recentJobMatches: sortByDate(jobMatches).slice(0, 5),
-  };
+    return {
+      profile,
+      stats: {
+        resumeCount: resumes.length,
+        analysisCount: analyses.length,
+        sessionCount: sessions.length,
+        jobMatchCount: jobMatches.length,
+        avgAts,
+        avgInterview,
+        avgJobMatch,
+      },
+      latestAnalysis: sortedAnalyses[0] || null,
+      recentSessions: sortByDate(sessions).slice(0, 5),
+      recentJobMatches: sortByDate(jobMatches).slice(0, 5),
+    };
+  } catch (error) {
+    console.error("Failed to generate user report:", error);
+    return null;
+  }
 };
