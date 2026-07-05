@@ -59,9 +59,32 @@ const withRetry = async (fn, retries = 3, delay = 200) => {
 };
 
 /**
- * Safely fetches a single document, falling back to cache if offline or timed out.
+ * Helper to resolve a valid DocumentReference if a helper output object is passed.
  */
-export const safeGetDoc = async (docRef, timeoutMs = 4000) => {
+const resolveDocRef = (refOrObj) => {
+  if (!refOrObj) return refOrObj;
+  if (refOrObj.ref && typeof refOrObj.ref === 'object' && refOrObj.id && refOrObj.path) {
+    return refOrObj.ref;
+  }
+  return refOrObj;
+};
+
+/**
+ * Safely fetches a single document, using a cache-first strategy.
+ * Falls back to network with an increased read timeout of 15 seconds.
+ */
+export const safeGetDoc = async (refOrObj, timeoutMs = 15000) => {
+  const docRef = resolveDocRef(refOrObj);
+  try {
+    const cacheSnap = await getDocFromCache(docRef);
+    if (cacheSnap && cacheSnap.exists()) {
+      console.log(`[Firestore Cache-First] Successfully read document from cache: ${docRef.id}`);
+      return cacheSnap;
+    }
+  } catch (cacheError) {
+    console.log(`[Firestore Cache-First] Document ${docRef.id} not found in cache. Fetching from network...`);
+  }
+
   try {
     return await withTimeout(
       withRetry(() => getDoc(docRef)),
@@ -69,22 +92,26 @@ export const safeGetDoc = async (docRef, timeoutMs = 4000) => {
       "Firestore read timed out"
     );
   } catch (error) {
-    console.warn(`safeGetDoc failed or timed out: ${error.message}. Attempting cache fallback...`);
-    try {
-      const cacheSnap = await getDocFromCache(docRef);
-      console.log(`Successfully retrieved document from cache: ${docRef.id}`);
-      return cacheSnap;
-    } catch (cacheError) {
-      console.error(`Failed to read document from cache: ${cacheError.message}`);
-      throw error; // Throw original error so caller knows server/cache both failed
-    }
+    console.warn(`safeGetDoc network fetch failed or timed out: ${error.message}`);
+    throw error;
   }
 };
 
 /**
- * Safely fetches multiple documents, falling back to cache if offline or timed out.
+ * Safely fetches multiple documents, using a cache-first strategy.
+ * Falls back to network with an increased read timeout of 15 seconds.
  */
-export const safeGetDocs = async (queryRef, timeoutMs = 4000) => {
+export const safeGetDocs = async (queryRef, timeoutMs = 15000) => {
+  try {
+    const cacheSnap = await getDocsFromCache(queryRef);
+    if (cacheSnap && !cacheSnap.empty) {
+      console.log(`[Firestore Cache-First] Successfully read query results from cache`);
+      return cacheSnap;
+    }
+  } catch (cacheError) {
+    console.log(`[Firestore Cache-First] Query results not found in cache. Fetching from network...`);
+  }
+
   try {
     return await withTimeout(
       withRetry(() => getDocs(queryRef)),
@@ -92,22 +119,16 @@ export const safeGetDocs = async (queryRef, timeoutMs = 4000) => {
       "Firestore query timed out"
     );
   } catch (error) {
-    console.warn(`safeGetDocs failed or timed out: ${error.message}. Attempting cache fallback...`);
-    try {
-      const cacheSnap = await getDocsFromCache(queryRef);
-      console.log(`Successfully retrieved query results from cache`);
-      return cacheSnap;
-    } catch (cacheError) {
-      console.error(`Failed to read query from cache: ${cacheError.message}`);
-      throw error;
-    }
+    console.warn(`safeGetDocs network fetch failed or timed out: ${error.message}`);
+    throw error;
   }
 };
 
 /**
  * Safely sets a document, falling back to offline persistence queue if server write hangs.
  */
-export const safeSetDoc = async (docRef, data, options = {}, timeoutMs = 4000) => {
+export const safeSetDoc = async (refOrObj, data, options = {}, timeoutMs = 15000) => {
+  const docRef = resolveDocRef(refOrObj);
   try {
     await withTimeout(
       withRetry(() => setDoc(docRef, data, options)),
@@ -126,7 +147,8 @@ export const safeSetDoc = async (docRef, data, options = {}, timeoutMs = 4000) =
 /**
  * Safely updates a document, falling back to offline persistence queue if server write hangs.
  */
-export const safeUpdateDoc = async (docRef, data, timeoutMs = 4000) => {
+export const safeUpdateDoc = async (refOrObj, data, timeoutMs = 15000) => {
+  const docRef = resolveDocRef(refOrObj);
   try {
     await withTimeout(
       withRetry(() => updateDoc(docRef, data)),
@@ -143,7 +165,8 @@ export const safeUpdateDoc = async (docRef, data, timeoutMs = 4000) => {
 /**
  * Safely deletes a document, falling back to offline persistence queue if server write hangs.
  */
-export const safeDeleteDoc = async (docRef, timeoutMs = 4000) => {
+export const safeDeleteDoc = async (refOrObj, timeoutMs = 15000) => {
+  const docRef = resolveDocRef(refOrObj);
   try {
     await withTimeout(
       withRetry(() => deleteDoc(docRef)),
@@ -161,7 +184,7 @@ export const safeDeleteDoc = async (docRef, timeoutMs = 4000) => {
  * Safely adds a document to a collection by generating the doc reference synchronously 
  * and using setDoc internally, guaranteeing a valid ID even when offline.
  */
-export const safeAddDoc = async (collectionRef, data, timeoutMs = 4000) => {
+export const safeAddDoc = async (collectionRef, data, timeoutMs = 15000) => {
   const newDocRef = getDocRef(collectionRef);
   const result = await safeSetDoc(newDocRef, data, {}, timeoutMs);
   return {

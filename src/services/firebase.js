@@ -11,7 +11,7 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+
 
 // Retrieve credentials from Vite environment variables, with fallback to default credentials
 const firebaseConfig = {
@@ -51,7 +51,6 @@ export const db = initializeFirestore(app, {
   })
 });
 
-// Initialize Storage
-export const storage = getStorage(app);
+
 
 export default app;

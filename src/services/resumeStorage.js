@@ -1,5 +1,4 @@
-import { auth, db, storage } from './firebase';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { auth, db } from './firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { logActivity } from './activityLogService';
@@ -12,70 +11,110 @@ import {
 } from '../utils/firestoreHelper';
 
 /**
- * Upload resume to Firebase Storage and save metadata to Firestore
- * @param {File} file - The PDF file to upload
- * @param {string} userId - The user's ID
- * @param {Object} resumeData - Parsed resume data
- * @returns {Promise<Object>} Resume document data with ID
+ * Maps raw Firestore resume documents to UI-compatible objects
  */
-export const uploadResume = async (file, userId, resumeData, onProgress = null) => {
+const mapResumeDoc = (docSnap) => {
+  if (!docSnap.exists()) return null;
+  const data = docSnap.data();
+  return {
+    id: docSnap.id,
+    userId: data.userId,
+    fileName: data.fileName,
+    originalFileName: data.fileName, // mapped for UI compatibility
+    uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(data.uploadedAt || 0),
+    resumeText: data.resumeText,
+    analysis: data.analysis,
+    ATSScore: data.ATSScore,
+    atsScore: data.ATSScore, // mapped for UI compatibility
+    skills: data.skills || [],
+    detectedSkills: data.skills || [], // mapped for UI compatibility
+    interviewQuestions: data.interviewQuestions || []
+  };
+};
+
+/**
+ * Maps raw Firestore resume_analysis documents to UI-compatible objects
+ */
+const mapAnalysisDoc = (docSnap) => {
+  if (!docSnap.exists()) return null;
+  const data = docSnap.data();
+  const analysisObj = data.analysis || {};
+  return {
+    id: docSnap.id,
+    userId: data.userId,
+    fileName: data.fileName,
+    uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(data.uploadedAt || 0),
+    createdAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(data.uploadedAt || 0), // mapped for sorting
+    resumeText: data.resumeText,
+    analysis: data.analysis,
+    ATSScore: data.ATSScore,
+    atsScore: data.ATSScore, // mapped for UI compatibility
+    skills: data.skills || [],
+    detectedSkills: data.skills || [], // mapped for UI compatibility
+    missingSkills: analysisObj.missingSkills || [],
+    overallRating: analysisObj.overallRating || 'N/A',
+    strengths: analysisObj.strengths || [],
+    weaknesses: analysisObj.weaknesses || [],
+    suggestions: analysisObj.improvementSuggestions || [],
+    improvementSuggestions: analysisObj.improvementSuggestions || [],
+    recommendedProjects: analysisObj.recommendedProjects || [],
+    recommendedCertifications: analysisObj.recommendedCertifications || [],
+    careerAdvice: analysisObj.careerAdvice || '',
+    interviewQuestions: data.interviewQuestions || []
+  };
+};
+
+/**
+ * Save resume metadata and analysis to Firestore (Firebase Storage is disabled on Spark plan)
+ * @param {string} fileName - The name of the file
+ * @param {string} userId - The user's ID
+ * @param {string} resumeText - Extracted text contents of the resume
+ * @param {Object} analysisData - Gemini-generated resume analysis
+ * @returns {Promise<Object>} Mapped resume document
+ */
+export const uploadResume = async (fileName, userId, resumeText, analysisData) => {
   try {
     if (!auth.currentUser) {
       throw new Error('User not authenticated');
     }
 
-    if (userId !== auth.currentUser.uid) {
-      throw new Error('User ID mismatch');
-    }
-
-    // Upload to Firebase Storage using resumable upload
-    const timestamp = Date.now();
-    const storagePath = `resumes/${userId}/${timestamp}_${file.name}`;
-    const storageRef = ref(storage, storagePath);
-
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    if (onProgress) {
-      uploadTask.on('state_changed', (snapshot) => {
-        const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        onProgress(pct);
-      });
-    }
-
-    const snapshot = await uploadTask;
-    const downloadURL = await getDownloadURL(snapshot.ref);
-
-    // Save metadata to Firestore using safeAddDoc
     const resumesCollection = collection(db, 'resumes');
-    const resumeDoc = await safeAddDoc(resumesCollection, {
+    const interviewQuestions = analysisData?.interviewQuestions || [];
+
+    // Save ONLY the 8 specified fields to Firestore resumes collection
+    const docRef = await safeAddDoc(resumesCollection, {
       userId,
-      fileName: resumeData.fileName,
-      originalFileName: file.name,
-      pageCount: resumeData.pageCount,
-      fileSize: resumeData.fileSize,
-      resumeText: resumeData.text,
-      storageUrl: downloadURL,
-      storagePath,
-      uploadedAt: new Date(resumeData.uploadedAt),
-      createdAt: new Date(),
-      updatedAt: new Date()
+      fileName,
+      uploadedAt: new Date(),
+      resumeText,
+      analysis: {
+        atsScore: analysisData.atsScore || 0,
+        overallRating: analysisData.overallRating || 'N/A',
+        strengths: analysisData.strengths || [],
+        weaknesses: analysisData.weaknesses || [],
+        detectedSkills: analysisData.detectedSkills || analysisData.skills || [],
+        missingSkills: analysisData.missingSkills || [],
+        improvementSuggestions: analysisData.improvementSuggestions || analysisData.suggestions || [],
+        recommendedProjects: analysisData.recommendedProjects || [],
+        recommendedCertifications: analysisData.recommendedCertifications || [],
+        careerAdvice: analysisData.careerAdvice || ''
+      },
+      ATSScore: analysisData.atsScore || 0,
+      skills: analysisData.detectedSkills || analysisData.skills || [],
+      interviewQuestions: interviewQuestions
     });
 
     await logActivity({
       userId,
       userEmail: auth.currentUser.email,
       action: 'resume_uploaded',
-      details: { resumeId: resumeDoc.id, fileName: file.name },
+      details: { resumeId: docRef.id, fileName },
     });
 
-    return {
-      id: resumeDoc.id,
-      ...resumeData,
-      storageUrl: downloadURL,
-      storagePath
-    };
+    const docSnapshot = await safeGetDoc(docRef.ref);
+    return mapResumeDoc(docSnapshot);
   } catch (error) {
-    console.error('Error uploading resume:', error);
+    console.error('Error saving resume to database:', error);
     throw error;
   }
 };
@@ -92,11 +131,8 @@ export const getUserResumes = async (userId) => {
     const querySnapshot = await safeGetDocs(q);
 
     const resumes = [];
-    querySnapshot.forEach((doc) => {
-      resumes.push({
-        id: doc.id,
-        ...doc.data()
-      });
+    querySnapshot.forEach((docSnap) => {
+      resumes.push(mapResumeDoc(docSnap));
     });
 
     return resumes;
@@ -120,10 +156,7 @@ export const getResume = async (resumeId) => {
       throw new Error('Resume not found');
     }
 
-    return {
-      id: resumeSnapshot.id,
-      ...resumeSnapshot.data()
-    };
+    return mapResumeDoc(resumeSnapshot);
   } catch (error) {
     console.error('Error fetching resume:', error);
     throw error;
@@ -131,21 +164,14 @@ export const getResume = async (resumeId) => {
 };
 
 /**
- * Delete a resume from Firebase Storage and Firestore
+ * Delete a resume from Firestore (Firebase Storage is disabled on Spark plan)
  * @param {string} resumeId - The resume document ID
- * @param {string} storagePath - The storage path of the file
  * @returns {Promise<void>}
  */
-export const deleteResume = async (resumeId, storagePath) => {
+export const deleteResume = async (resumeId) => {
   try {
-    // Delete from Storage
-    const storageRef = ref(storage, storagePath);
-    await deleteObject(storageRef);
-
-    // Delete from Firestore
     const resumeRef = doc(db, 'resumes', resumeId);
     await safeDeleteDoc(resumeRef);
-
     toast.success('Resume deleted successfully');
   } catch (error) {
     console.error('Error deleting resume:', error);
@@ -178,24 +204,36 @@ export const updateResumeMetadata = async (resumeId, updates) => {
  * Save resume analysis result in Firestore
  * @param {string} userId - The user's ID
  * @param {Object} analysisData - Detailed analysis data
+ * @param {string} fileName - The file name
+ * @param {string} resumeText - The parsed resume text
  * @returns {Promise<string>} Created document ID
  */
-export const saveAnalysisResult = async (userId, analysisData, fileName = 'Resume') => {
+export const saveAnalysisResult = async (userId, analysisData, fileName = 'Resume', resumeText = '') => {
   try {
     const analysisCollection = collection(db, 'resume_analysis');
+    const interviewQuestions = analysisData.interviewQuestions || [];
+
+    // Save ONLY the 8 specified fields in Firestore resume_analysis collection
     const docRef = await safeAddDoc(analysisCollection, {
       userId,
       fileName,
-      atsScore: analysisData.atsScore,
-      overallRating: analysisData.overallRating,
-      strengths: analysisData.strengths,
-      weaknesses: analysisData.weaknesses,
-      skills: analysisData.detectedSkills,
-      missingSkills: analysisData.missingSkills,
-      suggestions: analysisData.improvementSuggestions,
-      recommendedProjects: analysisData.recommendedProjects,
-      recommendedCertifications: analysisData.recommendedCertifications,
-      createdAt: new Date(),
+      uploadedAt: new Date(),
+      resumeText,
+      analysis: {
+        atsScore: analysisData.atsScore || 0,
+        overallRating: analysisData.overallRating || 'N/A',
+        strengths: analysisData.strengths || [],
+        weaknesses: analysisData.weaknesses || [],
+        detectedSkills: analysisData.detectedSkills || analysisData.skills || [],
+        missingSkills: analysisData.missingSkills || [],
+        improvementSuggestions: analysisData.improvementSuggestions || analysisData.suggestions || [],
+        recommendedProjects: analysisData.recommendedProjects || [],
+        recommendedCertifications: analysisData.recommendedCertifications || [],
+        careerAdvice: analysisData.careerAdvice || ''
+      },
+      ATSScore: analysisData.atsScore || 0,
+      skills: analysisData.detectedSkills || analysisData.skills || [],
+      interviewQuestions: interviewQuestions
     });
 
     await logActivity({
@@ -225,19 +263,14 @@ export const getLatestAnalysisResult = async (userId) => {
 
     const reports = [];
     querySnapshot.forEach((doc) => {
-      reports.push({
-        id: doc.id,
-        ...doc.data()
-      });
+      reports.push(mapAnalysisDoc(doc));
     });
 
     if (reports.length === 0) return null;
 
-    // Sort by createdAt descending (client-side to bypass Firebase index requirement)
+    // Sort by createdAt descending
     reports.sort((a, b) => {
-      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-      return dateB - dateA;
+      return b.createdAt - a.createdAt;
     });
 
     return reports[0];
@@ -395,17 +428,12 @@ export const getUserAnalyses = async (userId) => {
 
     const analyses = [];
     querySnapshot.forEach((doc) => {
-      analyses.push({
-        id: doc.id,
-        ...doc.data()
-      });
+      analyses.push(mapAnalysisDoc(doc));
     });
 
     // Sort by createdAt descending
     analyses.sort((a, b) => {
-      const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-      const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-      return dateB - dateA;
+      return b.createdAt - a.createdAt;
     });
 
     return analyses;

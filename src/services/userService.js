@@ -5,8 +5,7 @@ import {
   orderBy,
   where,
 } from 'firebase/firestore';
-import { ref, deleteObject, listAll } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import { logActivity } from './activityLogService';
 import {
   safeGetDoc,
@@ -175,13 +174,7 @@ const deleteCollectionByUserId = async (collectionName, userId) => {
 };
 
 const deleteUserStorage = async (userId) => {
-  try {
-    const folderRef = ref(storage, `resumes/${userId}`);
-    const list = await listAll(folderRef);
-    await Promise.all(list.items.map((itemRef) => deleteObject(itemRef)));
-  } catch (error) {
-    console.warn('Storage cleanup skipped:', error.message);
-  }
+  // Firebase Storage is disabled on Spark plan.
 };
 
 export const deleteUser = async (userId, adminUser) => {

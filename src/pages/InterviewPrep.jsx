@@ -120,6 +120,8 @@ const InterviewPrep = () => {
 
   // Generate Questions
   const handleGenerateQuestions = async () => {
+    if (generating) return;
+
     if (!hasEnvKey && !apiKey) {
       toast.error('Please configure your Gemini API Key first.');
       setShowKeyConfig(true);

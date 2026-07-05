@@ -123,20 +123,19 @@ const ResumeAnalysis = () => {
 
     try {
       setIsUploading(true);
-      setStatusText('Uploading resume file to secure storage...');
-      setUploadProgress(0);
+      setStatusText('Analyzing resume content with Gemini AI...');
+      setUploadProgress(25);
       
-      // Upload PDF file to storage and log metadata in resumes collection with progress listener
-      await uploadResume(uploadedFile, user.uid, resumeData, (pct) => {
-        setUploadProgress(pct);
-      });
-      
-      setStatusText('Saving AI analysis report to database...');
-      setUploadProgress(95);
-      
-      // Save computed AI Analysis to Firestore resume_analysis collection
+      // Compute AI analysis first
       const targetAnalysis = analysis || analysisResult || await analyzeResumeWithGemini(resumeData.text);
-      await saveAnalysisResult(user.uid, targetAnalysis, uploadedFile.name);
+      setAnalysisResult(targetAnalysis);
+
+      setStatusText('Saving profile to database...');
+      setUploadProgress(75);
+      
+      // Save metadata and analysis in Firestore
+      await uploadResume(uploadedFile.name, user.uid, resumeData.text, targetAnalysis);
+      await saveAnalysisResult(user.uid, targetAnalysis, uploadedFile.name, resumeData.text);
       
       setUploadProgress(100);
       toast.success('Resume and AI Analysis saved successfully!');
@@ -149,7 +148,7 @@ const ResumeAnalysis = () => {
       // Reload user resumes
       await loadUserResumes();
     } catch (error) {
-      console.error('Error uploading resume and analysis:', error);
+      console.error('Error saving resume and analysis:', error);
       toast.error(error.message || 'Failed to save resume analysis');
     } finally {
       setIsUploading(false);
@@ -159,6 +158,7 @@ const ResumeAnalysis = () => {
   };
 
   const handleManualUpload = async () => {
+    if (isUploading) return;
     if (!parsedResume || !uploadedFile || !user?.uid) {
       toast.error('Please upload and parse a resume first');
       return;
@@ -392,19 +392,6 @@ const ResumeAnalysis = () => {
                                 <span className="text-[9px] uppercase tracking-wider text-gray-450 font-bold">ATS Score</span>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                {matchingResume && (
-                                  <a
-                                    href={matchingResume.storageUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="p-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 rounded-lg border border-emerald-250 dark:border-emerald-900/30 transition flex items-center justify-center"
-                                    title="Download Original Resume PDF"
-                                    style={{ height: '34px', width: '34px' }}
-                                  >
-                                    📄
-                                  </a>
-                                )}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -443,16 +430,7 @@ const ResumeAnalysis = () => {
                             <FiArrowLeft /> Back to Saved Lists
                           </button>
                           <div className="flex gap-2">
-                            {matchingResume && (
-                              <a
-                                href={matchingResume.storageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-750 text-white text-xs font-bold rounded-xl shadow transition"
-                              >
-                                📄 Download Original PDF
-                              </a>
-                            )}
+
                             <button
                               onClick={() => generateResumeAnalysisPDF(getNormalizedAnalysis(selectedAnalysis), selectedAnalysis.fileName + '_analysis.pdf')}
                               className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow transition"

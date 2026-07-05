@@ -10,6 +10,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@google/genai": "^2.10.0",
     "firebase": "^10.14.1",
     "framer-motion": "^11.0.0",
     "jspdf": "^4.2.1",
