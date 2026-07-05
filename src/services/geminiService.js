@@ -209,6 +209,10 @@ const makeGeminiRequest = async (prompt, config = {}, timeoutMs = 120000) => {
           model: modelToUse,
           contents: prompt,
           config: {
+            temperature: 0.3,
+            maxOutputTokens: 4096,
+            topP: 0.8,
+            topK: 40,
             ...config
           }
         });
