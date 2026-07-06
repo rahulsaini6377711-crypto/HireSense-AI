@@ -77,6 +77,61 @@ const cleanJsonString = (str) => {
 };
 
 /**
+ * Repairs truncated or incomplete JSON strings by closing unclosed quotes, brackets, and braces.
+ */
+const repairTruncatedJson = (text) => {
+  let inString = false;
+  let escaped = false;
+  const stack = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+    } else {
+      if (char === '"') {
+        inString = true;
+      } else if (char === '{' || char === '[') {
+        stack.push(char);
+      } else if (char === '}') {
+        if (stack[stack.length - 1] === '{') {
+          stack.pop();
+        }
+      } else if (char === ']') {
+        if (stack[stack.length - 1] === '[') {
+          stack.pop();
+        }
+      }
+    }
+  }
+
+  let repaired = text;
+  if (inString) {
+    repaired += '"';
+  }
+
+  while (stack.length > 0) {
+    const last = stack.pop();
+    if (last === '{') {
+      repaired += '}';
+    } else if (last === '[') {
+      repaired += ']';
+    }
+  }
+
+  // Remove trailing commas inside arrays and objects
+  repaired = repaired.replace(/,\s*([\]}])/g, '$1');
+
+  return repaired;
+};
+
+/**
  * Parses and repairs malformed JSON responses returned by Gemini.
  */
 const repairAndParseJson = (text) => {
@@ -87,34 +142,18 @@ const repairAndParseJson = (text) => {
   } catch (initialError) {
     console.warn("[JSON Parser] Initial JSON parse failed. Attempting structural repairs...", initialError.message);
     
-    // Repair 1: Remove trailing commas in arrays and objects
-    let repaired = cleaned.replace(/,\s*([\]}])/g, '$1');
-
-    // Repair 2: Close unclosed curly braces and brackets
-    let openBraces = (repaired.match(/{/g) || []).length;
-    let closeBraces = (repaired.match(/}/g) || []).length;
-    while (openBraces > closeBraces) {
-      repaired += '}';
-      closeBraces++;
-    }
-
-    let openBrackets = (repaired.match(/\[/g) || []).length;
-    let closeBrackets = (repaired.match(/\]/g) || []).length;
-    while (openBrackets > closeBrackets) {
-      repaired += ']';
-      closeBrackets++;
-    }
-
     try {
+      const repaired = repairTruncatedJson(cleaned);
       return JSON.parse(repaired);
     } catch (secondError) {
-      // Repair 3: Extract the first JSON structure in the text if surrounded by conversational filler
+      // Fallback: Extract the first JSON structure in the text if surrounded by conversational filler
       const jsonStart = cleaned.indexOf('{');
       const jsonEnd = cleaned.lastIndexOf('}');
       if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         try {
-          const substringJson = cleaned.substring(jsonStart, jsonEnd + 1).replace(/,\s*([\]}])/g, '$1');
-          return JSON.parse(substringJson);
+          const substringJson = cleaned.substring(jsonStart, jsonEnd + 1);
+          const repairedSubstring = repairTruncatedJson(substringJson);
+          return JSON.parse(repairedSubstring);
         } catch (subError) {
           // Fall through to throw original
         }
@@ -456,7 +495,7 @@ You MUST return JSON only. The JSON response must strictly follow this schema:
 Return ONLY valid JSON. Do not include any explanations, markdown code blocks, or preamble outside of the JSON structure.`;
 
   try {
-    const parsed = await makeGeminiJsonRequest(prompt, { temperature: 0.3 }, timeoutMs);
+    const parsed = await makeGeminiJsonRequest(prompt, { temperature: 0.3, maxOutputTokens: 6000 }, timeoutMs);
     responseCache.set(cacheKey, parsed);
     return parsed;
   } catch (error) {
@@ -556,7 +595,7 @@ You MUST return JSON only. The JSON response must strictly follow this schema:
   ]
 }
 
-Return ONLY valid JSON. Do not include any explanation, markdown code blocks, or preamble outside of the JSON structure. Make sure you return exactly 10 HR, 15 Technical, 10 Project, 10 Behavioral, and 5 Coding questions.`;
+Return ONLY valid JSON. Do not include any explanation, markdown code blocks, or preamble outside of the JSON structure. Make sure you return exactly 10 HR, 15 Technical, 10 Project, 10 Behavioral, and 5 Coding questions. Keep the answers, evaluation criteria, and rubric guidelines concise (1-3 sentences maximum each) to ensure the output fits within token limits.`;
 
   const cacheKey = `questions_${resumeText.substring(0, 100)}_${company}_${level}`;
   if (responseCache.has(cacheKey)) {
@@ -564,7 +603,7 @@ Return ONLY valid JSON. Do not include any explanation, markdown code blocks, or
   }
 
   try {
-    const parsed = await makeGeminiJsonRequest(prompt, { temperature: 0.3 }, timeoutMs);
+    const parsed = await makeGeminiJsonRequest(prompt, { temperature: 0.3, maxOutputTokens: 8192 }, timeoutMs);
     responseCache.set(cacheKey, parsed);
     return parsed;
   } catch (error) {
@@ -660,7 +699,7 @@ Return ONLY valid JSON. Do not include any explanations, markdown code blocks, o
   }
 
   try {
-    const parsed = await makeGeminiJsonRequest(prompt, { temperature: 0.2 }, timeoutMs);
+    const parsed = await makeGeminiJsonRequest(prompt, { temperature: 0.2, maxOutputTokens: 6000 }, timeoutMs);
     responseCache.set(cacheKey, parsed);
     return parsed;
   } catch (error) {
@@ -795,7 +834,7 @@ You MUST return JSON only. The JSON response must strictly follow this schema:
 Return ONLY valid JSON. Do not include any explanations, markdown code blocks, or preamble outside of the JSON structure.`;
 
   try {
-    return await makeGeminiJsonRequest(prompt, { temperature: 0.2 }, timeoutMs);
+    return await makeGeminiJsonRequest(prompt, { temperature: 0.2, maxOutputTokens: 8192 }, timeoutMs);
   } catch (error) {
     console.warn("Coding grade evaluation failed, using fallback:", error.message);
     return {
