@@ -182,6 +182,24 @@ const getGenAIClient = (apiKey) => {
   return genAIInstance;
 };
 
+export const initializeGemini = () => {
+  const apiKey = getApiKey();
+  if (apiKey) {
+    try {
+      getGenAIClient(apiKey);
+      console.log("[Gemini Service] Successfully initialized client.");
+    } catch (err) {
+      console.error("[Gemini Service] Failed to initialize GoogleGenAI client:", err);
+    }
+  } else {
+    console.error("[Gemini Service] API key is missing (VITE_GEMINI_API_KEY).");
+    toast.error("Application configuration error. Contact administrator.", {
+      id: "gemini-api-key-missing",
+      duration: 10000
+    });
+  }
+};
+
 /**
  * Self-healing model fallback resolution logic.
  */
@@ -225,7 +243,7 @@ const handleModelFallback = async (ai, lastError) => {
 const makeGeminiRequest = async (prompt, config = {}, timeoutMs = 120000) => {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error('Gemini API Key is not configured. Please configure VITE_GEMINI_API_KEY.');
+    throw new Error('Application configuration error. Contact administrator.');
   }
 
   const ai = getGenAIClient(apiKey);
@@ -367,8 +385,8 @@ export const testGemini = async () => {
       sdkVersion,
       modelName,
       duration: 0,
-      error: "API key is not configured (VITE_GEMINI_API_KEY)",
-      fullError: new Error("API key is not configured")
+      error: "Application configuration error. Contact administrator.",
+      fullError: new Error("Application configuration error. Contact administrator.")
     };
   }
 

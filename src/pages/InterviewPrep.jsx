@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { 
   FiSearch, FiCopy, FiBookmark, FiChevronDown, FiChevronUp, 
-  FiKey, FiBriefcase, FiCpu, FiUser, FiCheck, FiPlay, FiFileText 
+  FiKey, FiBriefcase, FiCpu, FiUser, FiCheck, FiPlay, FiFileText,
+  FiAlertCircle
 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import { getUserResumes } from '../services/resumeStorage';
@@ -17,8 +18,6 @@ const InterviewPrep = () => {
   const navigate = useNavigate();
 
   // API Key state
-  const [apiKey, setApiKey] = useState('');
-  const [showKeyConfig, setShowKeyConfig] = useState(false);
   const [hasEnvKey, setHasEnvKey] = useState(false);
 
   // Resume selection and options
@@ -52,14 +51,11 @@ const InterviewPrep = () => {
   // Check API keys and load saved resumes
   useEffect(() => {
     const envKey = import.meta.env.VITE_GEMINI_API_KEY;
-    const localKey = localStorage.getItem('VITE_GEMINI_API_KEY') || localStorage.getItem('gemini_api_key');
     
     if (envKey) {
       setHasEnvKey(true);
-    } else if (localKey) {
-      setApiKey(localKey);
     } else {
-      setShowKeyConfig(true);
+      setHasEnvKey(false);
     }
 
     if (user?.uid) {
@@ -99,32 +95,12 @@ const InterviewPrep = () => {
     }
   };
 
-  const handleSaveApiKey = (e) => {
-    e.preventDefault();
-    if (!apiKey.trim()) {
-      toast.error('Please enter a valid API key');
-      return;
-    }
-    localStorage.setItem('VITE_GEMINI_API_KEY', apiKey.trim());
-    setShowKeyConfig(false);
-    toast.success('Gemini API Key saved successfully');
-  };
-
-  const handleClearApiKey = () => {
-    localStorage.removeItem('VITE_GEMINI_API_KEY');
-    localStorage.removeItem('gemini_api_key');
-    setApiKey('');
-    setShowKeyConfig(true);
-    toast.success('Gemini API Key removed');
-  };
-
   // Generate Questions
   const handleGenerateQuestions = async () => {
     if (generating) return;
 
-    if (!hasEnvKey && !apiKey) {
-      toast.error('Please configure your Gemini API Key first.');
-      setShowKeyConfig(true);
+    if (!hasEnvKey) {
+      toast.error('Application configuration error. Contact administrator.');
       return;
     }
 
@@ -273,64 +249,27 @@ const InterviewPrep = () => {
 
         {/* API Key management */}
         <div className="flex items-center gap-2">
-          {!hasEnvKey && (
-            <button
-              onClick={() => setShowKeyConfig(!showKeyConfig)}
-              className="flex items-center gap-1.5 px-4 py-2 border border-gray-300 dark:border-gray-650 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-750 transition font-bold text-sm shadow-sm"
-            >
-              <FiKey />
-              {apiKey ? 'Change API Key' : 'Configure API Key'}
-            </button>
-          )}
         </div>
       </div>
 
       {/* Key Config Panel */}
       <AnimatePresence>
-        {showKeyConfig && !hasEnvKey && (
+        {!hasEnvKey && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 rounded-2xl p-6"
+            className="overflow-hidden bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 rounded-2xl p-6"
           >
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded-xl">
-                <FiKey size={24} />
+              <div className="p-3 bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-350 rounded-xl">
+                <FiAlertCircle size={24} />
               </div>
-              <div className="flex-1 space-y-4">
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white">Google Gemini API Key Required</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    To generate custom interview prep content, you must configure a Google Gemini API Key. Keys are processed securely client-side and saved only inside your local browser.
-                  </p>
-                </div>
-                <form onSubmit={handleSaveApiKey} className="flex flex-col sm:flex-row gap-3 max-w-lg">
-                  <input
-                    type="password"
-                    placeholder="Enter your Gemini API Key..."
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-900 text-gray-950 dark:text-white rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition text-sm"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm transition shadow-md shadow-amber-600/10"
-                    >
-                      Save Key
-                    </button>
-                    {localStorage.getItem('VITE_GEMINI_API_KEY') && (
-                      <button
-                        type="button"
-                        onClick={handleClearApiKey}
-                        className="px-4 py-2 border border-rose-250 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 rounded-xl font-bold text-sm transition"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </form>
+              <div className="flex-1">
+                <h3 className="font-bold text-gray-900 dark:text-white">Configuration Error</h3>
+                <p className="text-sm text-rose-600 dark:text-rose-450 mt-1 font-semibold">
+                  Application configuration error. Contact administrator.
+                </p>
               </div>
             </div>
           </motion.div>
