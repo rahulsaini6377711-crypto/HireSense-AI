@@ -1,6 +1,6 @@
-import { 
-  generateQuestionsWithGemini, 
-  evaluateAnswerWithGemini 
+import {
+  generateQuestionsWithGemini,
+  evaluateAnswerWithGemini
 } from './geminiService';
 
 /**
